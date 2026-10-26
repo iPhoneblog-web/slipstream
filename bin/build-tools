@@ -1,0 +1,99 @@
+#!/bin/zsh
+# Builds the worker's tools at `encoder`'s versions for macOS arm64 into build/tools:
+# ffmpeg and ffprobe (Debian 13's ffmpeg 7.1.5 with x265 4.1 and x264 0.164.3108), and
+# whisper-cli (whisper.cpp v1.9.5, with Metal), plus versions.txt for the About window.
+# The queue hands a worker rungs only when its tool versions match `encoder`'s exactly
+# (ADR-0007 §2), so the numbers here follow infra's `encoder` role and Debian 13; docs/tools.md.
+#   bin/build-tools          about 15 minutes on an M2; CI caches the result
+# Needs cmake (or uv, for `uvx cmake`) and pkg-config. Sources are checked by sha256.
+set -euo pipefail
+cd "${0:A:h}/.."
+root=$PWD
+out=$root/build/tools
+work=$root/build/tools-src
+prefix=$work/prefix
+jobs=$(sysctl -n hw.ncpu)
+if command -v cmake >/dev/null; then cmake=(cmake); else cmake=(uvx cmake); fi
+export MACOSX_DEPLOYMENT_TARGET=14.0
+
+mkdir -p "$work" "$out"
+fetch() {  # url file sha256
+  [[ -f $work/$2 ]] || curl -fsSL -o "$work/$2" "$1"
+  print -r -- "$3  $work/$2" | shasum -a 256 -c --quiet
+}
+fetch https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz ffmpeg-7.1.5.tar.xz \
+  de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f
+fetch https://deb.debian.org/debian/pool/main/x/x265/x265_4.1.orig.tar.xz x265_4.1.orig.tar.xz \
+  85abb8a850000bf693947459c42a666a3ecd6de10a2ac6b3c6647554b14d3270
+fetch 'https://deb.debian.org/debian/pool/main/x/x264/x264_0.164.3108+git31e19f9.orig.tar.gz' x264.orig.tar.gz \
+  41606cb8e788a7f8c4514290646d4ba5c7bc68d9e1ccd1a73f446a90546913eb
+fetch https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz whisper.cpp-1.9.5.tar.gz \
+  ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720
+
+cd "$work"
+rm -rf x265_4.1 ffmpeg-7.1.5 x264-src whisper.cpp-1.9.5 "$prefix"
+tar xf x265_4.1.orig.tar.xz
+tar xf ffmpeg-7.1.5.tar.xz
+mkdir x264-src && tar xf x264.orig.tar.gz -C x264-src --strip-components 1
+tar xf whisper.cpp-1.9.5.tar.gz
+
+# x265 as Debian builds it: 8-bit main with the 10- and 12-bit libraries linked in.
+cd "$work/x265_4.1/build" && mkdir -p 12bit 10bit 8bit
+(cd 12bit && $cmake ../../source -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DEXPORT_C_API=OFF \
+   -DENABLE_SHARED=OFF -DENABLE_CLI=OFF >/dev/null && make -s -j$jobs)
+(cd 10bit && $cmake ../../source -DHIGH_BIT_DEPTH=ON -DEXPORT_C_API=OFF \
+   -DENABLE_SHARED=OFF -DENABLE_CLI=OFF >/dev/null && make -s -j$jobs)
+cd 8bit
+ln -sf ../10bit/libx265.a libx265_main10.a
+ln -sf ../12bit/libx265.a libx265_main12.a
+$cmake ../../source -DEXTRA_LIB="x265_main10.a;x265_main12.a" -DEXTRA_LINK_FLAGS=-L. \
+  -DLINKED_10BIT=ON -DLINKED_12BIT=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF \
+  -DCMAKE_INSTALL_PREFIX="$prefix" >/dev/null
+make -s -j$jobs
+mv libx265.a libx265_main.a
+libtool -static -o libx265.a libx265_main.a libx265_main10.a libx265_main12.a
+make -s install >/dev/null
+
+# x264 with every bit depth, as Debian's libx264-164. Its version comes from git, which an
+# orig tarball lacks; Debian writes it by hand, and so does this.
+cd "$work/x264-src"
+./configure --prefix="$prefix" --enable-static --disable-cli --enable-pic --bit-depth=all \
+  --chroma-format=all >/dev/null
+cat > version.h <<'EOF'
+#define X264_REV 3108
+#define X264_REV_DIFF 0
+#define X264_VERSION " r3108 31e19f9"
+#define X264_POINTVER "0.164.3108 31e19f9"
+EOF
+make -s -j$jobs
+make -s install >/dev/null
+
+# ffmpeg: Debian's version string (7.1.5-0+deb13u1), nothing found by chance on the build Mac.
+cd "$work/ffmpeg-7.1.5"
+PKG_CONFIG_PATH="$prefix/lib/pkgconfig" ./configure --prefix="$prefix" --extra-version=0+deb13u1 \
+  --enable-gpl --enable-libx264 --enable-libx265 --disable-autodetect --enable-zlib \
+  --disable-doc --disable-ffplay --extra-libs=-lc++ --pkg-config-flags=--static >/dev/null
+make -s -j$jobs
+cp ffmpeg ffprobe "$out/"
+
+# whisper.cpp with Metal, its shader library inside the binary, no shared libraries.
+cd "$work/whisper.cpp-1.9.5"
+$cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=ON \
+  -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF \
+  -DWHISPER_BUILD_EXAMPLES=ON >/dev/null
+$cmake --build build -j$jobs --target whisper-cli >/dev/null
+cp build/bin/whisper-cli "$out/"
+
+cd "$out"
+{
+  ./ffmpeg -hide_banner -version | head -1
+  print "x265 4.1, x264 0.164.3108 31e19f9"
+  print "whisper.cpp v1.9.5"
+} > versions.txt
+for f in ffmpeg ffprobe whisper-cli; do
+  if otool -L $f | tail -n +2 | grep -v -E '^\s*(/usr/lib/|/System/)'; then
+    print "$f links a library outside the system" >&2
+    exit 1
+  fi
+done
+cat versions.txt

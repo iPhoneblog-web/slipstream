@@ -1,0 +1,29 @@
+#!/bin/zsh
+# Fetches the worker's macOS arm64 binary from kyrios/encode-queue's release into
+# build/worker/encode-worker (docs/worker.md). Without that release it says so and exits 0:
+# the app then runs ProRes only.
+#   bin/fetch-worker [tag]    default v0.1.0
+set -euo pipefail
+cd "${0:A:h}/.."
+tag=${1:-v0.1.0}
+repo=kyrios/encode-queue
+mkdir -p build/worker
+rm -f build/worker/*
+if ! gh release view "$tag" -R $repo >/dev/null 2>&1; then
+  print "no release $tag of $repo yet: building without the worker"
+  exit 0
+fi
+gh release download "$tag" -R $repo -D build/worker -p '*darwin*arm64*' -p 'SHA256SUMS*' -p '*checksums*'
+cd build/worker
+for sums in SHA256SUMS* *checksums*(N); do
+  [[ -f $sums ]] && shasum -a 256 -c --ignore-missing "$sums"
+done
+bin=$(ls | grep -E 'darwin.*arm64' | head -1)
+case $bin in
+  *.tar.gz) tar xzf "$bin"; bin=$(find . -type f -name 'encode-worker*' ! -name '*.tar.gz' | head -1) ;;
+  *.zip) ditto -x -k "$bin" .; bin=$(find . -type f -name 'encode-worker*' ! -name '*.zip' | head -1) ;;
+esac
+mv "$bin" encode-worker
+chmod +x encode-worker
+file encode-worker | grep -q 'Mach-O 64-bit executable arm64'
+./encode-worker --version || true

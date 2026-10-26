@@ -1,83 +1,71 @@
-# The encoding
+# The ProRes intermediate
 
-What ProRes Drop makes of a file, why, and what it measured. The numbers live in
-`Sources/DropCore/Plan.swift` and `Transcoder.swift`; this page carries their reasons.
+What Slipstream makes of a ProRes file dropped into the upload center, why, and what it
+measured. The numbers live in `Sources/DropCore/Plan.swift` and `Transcoder.swift`; this page
+carries their reasons. ADR-0007 §7 and §8 (iphoneblog-wordpress) decided them.
 
-## Why this format
+## Why an intermediate
 
-The server this app feeds (its encoder lives in the private `infra` repository,
-`roles/encoder/files/video-encode`) encodes every upload into an HEVC ladder. Its 4K rung is x265
-`slower` CRF 29 capped at 5 Mbit/s. Since 2026-10-20 the plan is that an HEVC 4K upload at
-delivery size, at most about 6 Mbit/s, becomes the 4K file by remux; the server then encodes only
-1080, 720 and H.264, and the 4K file is there within minutes instead of 27 or more. ProRes
-uploads are allowed only up to one minute, because a minute is about 5 GB. ProRes Drop turns a
-ProRes export into exactly that upload, on the Mac's media engine.
+4K ProRes 422 HQ is about 5 GB a minute: too big to upload. Slipstream encodes it on the Mac
+before the upload, into an HEVC file that is only the ladder's source: `encoder` makes every rung
+from it, 4K at `ultrafast` in stage 1 and `slower` in stage 2, as from any master. No reader
+gets it, and it is not archived. The ProRes on the Mac stays the only source for encoding the
+video again.
 
-**The server's acceptance rule is not in `video-encode` yet** (2026-10-20). When it lands, check
-this page against it: the bit-rate bound, whether audio counts, and what "delivery size" means
-for a source that is not 16:9.
+**The rule** (ADR-0007 §8): the 4K rung made from the intermediate scores at most 1 VMAF point
+below the 4K rung made from the ProRes, both against the ProRes, with `vmaf_4k_v0.6.1`.
 
 ## What comes out
 
 | | value | why |
 |---|---|---|
-| Video | HEVC Main 10, tagged `hvc1`, 4:2:0 10-bit | what the server's 4K rung is; `hvc1` plays in Safari and QuickTime, `hev1` does not |
-| Size | the source's, scaled into 3840×2160 only when larger, never up; portrait turns the box | the server's `fit()`: the same rounding, so 4096×2160 becomes 3840×2024 on both sides |
-| Frames | the source's frame rate and timestamps, every frame kept | a remux keeps them as they are |
-| Rate | 5 Mbit/s average, at most 6 Mbit/s in any second, for 4K at 25 frames or more; smaller sources get their share by pixels × frame rate | lands at about 4.2 Mbit/s of video, see "Measured" |
-| Key frames | every 4 seconds at most | seeking in a long file without spending many bits |
+| Video | HEVC Main 10, tagged `hvc1`, 4:2:0 10-bit, VideoToolbox | the media engine: about the same time at any rate, so the rate buys quality and costs only bytes |
+| Rate | 50 Mbit/s average, no peak limit, for every size and frame rate | lost 0.8 VMAF in the 4K rung on the alpaca clip; 40 lost 1.2 (see "Measured") |
+| Size | the source's, scaled into 3840×2160 only when larger, never up; portrait turns the box | the server's `fit()`, the same rounding: 4096×2160 becomes 3840×2024 |
+| Frames | the source's frame rate and timestamps, every frame kept | |
+| Key frames | every 4 seconds at most | |
 | Colour | the source's primaries, transfer and matrix, all three or none | Final Cut writes Rec. 709 (1-1-1); a missing tag is not invented |
-| Audio | the first audio track, AAC-LC stereo 48 kHz 256 kbit/s; mono becomes two equal channels | the server takes `0:a:0`, and copies AAC into the top rung |
-| Container | MP4, `moov` before `mdat` (fast start) | a browser plays before the whole file is there |
-| Name | the source's name with `.mp4`; `Name 2.mp4` when taken | never overwrites, never the source itself |
+| Audio | the first audio track, AAC-LC stereo 48 kHz 256 kbit/s; mono becomes two equal channels | the server takes `0:a:0` |
+| Container | MP4, `moov` before `mdat` (fast start) | |
 
-Timecode and other tracks are dropped. A file appears in the destination folder only after it is
-read back and checked (playable, `hvc1`, Main 10, index in front, the source's length within one
-frame, audio where the source had some); until then it lives in a temporary folder on the same
-disk.
+Timecode and other tracks are dropped. The file is read back and checked before the page may
+upload it: playable by AVFoundation, `hvc1`, Main 10, the index in front, the source's length
+within one frame, audio where the source had some. Until then it lives in a temporary folder.
 
-## Why VideoToolbox with an average and a peak
+10 minutes of 4K are 3.8 GB at 50 Mbit/s, about 35 s of upload at 1 Gbit/s; a 30-minute video
+(11 GB) still fits the 28 GiB `encoder` holds for uploads in flight.
 
-VideoToolbox has no CRF. With an average alone it spends exactly that, on every source. A peak
-limit (`DataRateLimits`) holds it well below the limit, with headroom for hard scenes. Measured on
-the 60-second 4K25 sample below, whole file with audio:
+## Where it runs
 
-| average | peak, per second | file Mbit/s |
-|---|---|---|
-| 4.5 | 5.0 | 3.76 |
-| 5.0 | 5.5 over 2 s | 4.11 |
-| **5.0** | **6.0** | **4.46** |
-| 4.5 | none | 4.76 |
-| 6.0 | none | 6.26 |
-
-The chosen pair lands at or below 5 Mbit/s and never above 6 in any second. Constant quality
-(`kVTCompressionPropertyKey_Quality`) with the same peak behaved the same way on these samples and
-gives no control over the average, so the app does not use it.
+In its own process, `Contents/Helpers/slipstream-cli --progress-json`, at `nice 19`
+(`ProcessEncoder`), like every encode Slipstream runs. One at a time. The pause and the CPU
+limits of the settings do not apply: the user waits for it, and it runs on the media engine.
 
 ## Measured
 
-On an Apple M2 Max, macOS 26.5.1, 2026-10-20, with `bin/test-encode` (synthetic 4K25 ProRes 422
-HQ, 60 s, 788 Mbit/s, testsrc2 with grain, Rec. 709, PCM stereo, timecode):
+ADR-0007 §8, on Thorsten's Mac Studio (M2 Max, Homebrew ffmpeg's `hevc_videotoolbox`,
+libvmaf, 2026-10-26). The clip: 10 s of 4K30 iPhone footage (HLG), made into ProRes 422 HQ.
+The 4K rung: x265 `slower` CRF 29, `vbv-maxrate=5000:vbv-bufsize=10000`.
 
-- **20.4 s for 60 s of 4K**, about 3× real time; the file has 4.46 Mbit/s (video 4.20, audio
-  0.25), 33.4 MB.
-- ffprobe: `hevc`, `hvc1`, `Main 10`, `yuv420p10le`, 3840×2160, 25/1, 1500 frames, bt709 ×3,
-  60.000 s for video, audio and file; AAC LC 48 kHz stereo; boxes `ftyp moov mdat`.
-- AVFoundation calls it playable and decodes its first and last frame; QuickTime Player opened it
-  without an error.
+| intermediate | encode for 10 s | 10 minutes | 4K rung from it, VMAF 4K / default | lost |
+|---|---|---|---|---|
+| none: the rung from the ProRes | — | — | 89.6 / 79.5 | — |
+| VideoToolbox 20 Mbit/s | 4.2 s | 1.5 GB | 86.1 / 73.8 | 3.4 / 5.7 |
+| VideoToolbox 40 Mbit/s | 5.2 s | 3.1 GB | 88.4 / 77.6 | 1.2 / 2.0 |
+| **VideoToolbox 50 Mbit/s** | **4.0 s** | **3.8 GB** | **88.8 / 78.4** | **0.8 / 1.2** |
+| VideoToolbox 60 Mbit/s | 4.4 s | 4.6 GB | 89.2 / 79.0 | 0.4 / 0.6 |
+| VideoToolbox 80 Mbit/s | 4.4 s | 6.1 GB | 89.4 / 79.3 | 0.2 / 0.3 |
 
-Quality against x265 `slower` CRF 29 with `vbv-maxrate=5000:vbv-bufsize=10000` (what the server's
-4K rung is meant to be), 10-second clips, against the ProRes source:
+`bin/test-encode` through Slipstream's own encode (synthetic 4K25 ProRes 422 HQ, 60 s,
+788 Mbit/s, testsrc2 with grain, Rec. 709, PCM stereo, timecode), Apple M2 Max, macOS 26.5.1,
+2026-10-26, with the Mac at a load of about 80 from other encodes: **25.2 s for 60 s of 4K**;
+the file has 49.9 Mbit/s (video 49.65, audio 0.25), 374 MB, 1500 frames, `hvc1` Main 10,
+bt709 ×3, boxes `ftyp moov mdat`, 60.000 s; AVFoundation plays it and decodes its first and
+last frame.
 
-| clip | encoder | video Mbit/s | PSNR avg dB | SSIM | time for 10 s |
-|---|---|---|---|---|---|
-| testsrc2 + grain | VideoToolbox 5/6 | 4.20 | 37.07 | 0.938 | 4 s |
-| testsrc2 + grain | x265 slower CRF 29 | 5.36 | 37.49 | 0.939 | 156 s |
-| testsrc2, clean | VideoToolbox 5/6 | 4.19 | 36.72 | 0.980 | 5 s |
-| testsrc2, clean | x265 slower CRF 29 | 5.36 | 38.76 | 0.986 | 97 s |
+**Alex's first real export decides** (ADR test 5): `bin/rungs.zsh` runs the table above on it.
+If the rung from the intermediate loses more than 1 point at 50 Mbit/s, the rate goes to the
+first of 60 and 80 that passes, here and in `Plan.swift`.
 
-Both clear the server's floors (PSNR 34, SSIM 0.85) by far. Synthetic pictures are not real
-footage: a real export decides whether the quality holds, and its numbers go here.
-
-The M2 Max has two video encode engines; one file uses one. An M2 has one, so its time per file
-should be close to this; measure it on the first real export from one.
+The ProRes Drop delivery encode (5 Mbit/s, remuxed as the 4K rung) is gone: on the alpaca
+clip it scored PSNR-Y 29.8 dB and SSIM 0.840, against 32.9 dB and 0.912 for x265 `slower`.

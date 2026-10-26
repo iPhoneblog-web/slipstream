@@ -1,13 +1,13 @@
 #!/bin/zsh
 # The end-to-end check on a real-size file: makes a 4K ProRes 422 HQ sample with ffmpeg (60 s,
-# 25 fps, Rec. 709, PCM stereo, a timecode track: what Final Cut exports), runs the app's encode
-# through prores-drop-cli, and checks the result with ffprobe and AVFoundation, the framework
+# 25 fps, Rec. 709, PCM stereo, a timecode track: what Final Cut exports), runs the app's intermediate
+# through slipstream-cli, and checks the result with ffprobe and AVFoundation, the framework
 # QuickTime Player plays with. SHOW=yes also opens it in QuickTime Player to look at.
 #   bin/test-encode [work-dir] [seconds]
 # The sample is about 6 GB a minute; the work directory keeps it for the next run.
 set -euo pipefail
 cd "${0:A:h}/.."
-work=${1:-${TMPDIR:-/tmp}/prores-drop-test}
+work=${1:-${TMPDIR:-/tmp}/slipstream-test}
 secs=${2:-60}
 mkdir -p "$work"
 src="$work/sample-4k25-${secs}s.mov"
@@ -23,11 +23,11 @@ if [[ ! -s "$src" ]]; then
     -c:v prores_videotoolbox -profile:v hq -c:a pcm_s24le -timecode 01:00:00:00 "$src"
 fi
 
-swift build -c release --product prores-drop-cli >/dev/null
+swift build -c release --product slipstream-cli >/dev/null
 rm -rf "$outdir"
 mkdir -p "$outdir"
 echo "== encoding on $(sysctl -n machdep.cpu.brand_string), macOS $(sw_vers -productVersion)"
-report=$(.build/release/prores-drop-cli "$src" --out "$outdir" 2>/dev/null)
+report=$(.build/release/slipstream-cli "$src" --out "$outdir" 2>/dev/null)
 print -r -- "$report"
 out=$(print -r -- "$report" | python3 -c 'import json,sys; print(json.load(sys.stdin)["output"])')
 
@@ -48,7 +48,7 @@ check "profile Main 10, 10 bit"    '[[ "$(v profile,pix_fmt)" == "Main 10,yuv420
 check "3840x2160 at 25 fps"        '[[ "$(v width,height,r_frame_rate)" == "3840,2160,25/1" ]]'
 check "Rec. 709 tags kept"         '[[ "$(v color_primaries,color_transfer,color_space)" == "bt709,bt709,bt709" ]]'
 check "index in front (moov before mdat)" '[[ "$boxes" == *moov*mdat* ]]'
-check "whole file at most 5 Mbit/s" '(( $(fmt bit_rate "$out") <= 5000000 ))'
+check "whole file about 50 Mbit/s, at most 60" '(( $(fmt bit_rate "$out") <= 60000000 ))'
 check "duration equals the source" '[[ "$(fmt duration "$out")" == "$(fmt duration "$src")" ]]'
 check "AAC stereo, 48 kHz"         '[[ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,channels,sample_rate -of csv=p=0 "$out")" == "aac,48000,2" ]]'
 swift "tools/playable.swift" "$out" >"$work/playable.txt" 2>&1 || true

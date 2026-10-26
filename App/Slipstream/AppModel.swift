@@ -1,0 +1,279 @@
+import AppKit
+import Foundation
+import HelperCore
+import os
+
+/// Everything the menu shows, and the pieces behind it: the loopback endpoint with the ProRes
+/// jobs, and the worker for the queue's jobs (ADR-0007 §9).
+@MainActor
+final class AppModel: ObservableObject {
+    enum Connection: Equatable {
+        /// No tunnel yet: this Mac only encodes ProRes until it is paired.
+        case notPaired
+        /// This build carries no worker.
+        case noWorker
+        case down
+        case up
+    }
+
+    struct ResultLine: Identifiable, Equatable {
+        let id = UUID()
+        var title: String
+        var verdict: String
+        var check: String?
+        var at: Date
+    }
+
+    @Published private(set) var connection: Connection = .notPaired
+    @Published private(set) var lastAnswer: Date?
+    @Published private(set) var refused: [WorkerEvent.Refusal] = []
+    @Published private(set) var queueJob: WorkerJob?
+    @Published private(set) var proresJob: JobStatus?
+    @Published private(set) var results: [ResultLine] = []
+    @Published private(set) var finishedToday = 0
+    @Published private(set) var pausedUntil: Date?
+    @Published private(set) var logLines: [String] = []
+    @Published private(set) var tools: [WorkerEvent.Tool] = []
+    @Published private(set) var updateAvailable: String?
+    @Published private(set) var problem: String?
+
+    static let uploadCenter = URL(string: "https://upload.iphoneblog.de/")!
+    static let releases = URL(string: "https://github.com/iPhoneblog-web/slipstream/releases/latest")!
+
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
+    private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "app")
+    private let defaults = UserDefaults.standard
+    private var jobs: ProResJobs?
+    private var server: LoopbackServer?
+    private var worker: WorkerProcess?
+    private var awake: NSObjectProtocol?
+    private var timers: [Timer] = []
+
+    // MARK: - Settings (Settings window)
+
+    static let maxThreads = ProcessInfo.processInfo.activeProcessorCount
+
+    var limits: WorkerProcess.Limits {
+        let threads = defaults.integer(forKey: "threads")
+        return WorkerProcess.Limits(threads: threads > 0 ? min(threads, Self.maxThreads) : Self.maxThreads,
+                                    gpu: defaults.object(forKey: "gpu") as? Bool ?? true,
+                                    jobs: max(1, defaults.integer(forKey: "jobs")))
+    }
+
+    func limitsChanged() {
+        let l = limits
+        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs))
+    }
+
+    // MARK: - Start
+
+    func start() {
+        pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
+        if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
+            finishedToday = defaults.integer(forKey: "todayCount")
+        }
+
+        // Every encode runs in its own process at nice 19 (ProcessEncoder, WorkerProcess), so
+        // whatever the user does comes first, and the app itself keeps its normal priority for the
+        // loopback. Not the `background` QoS, which keeps work on the efficiency cores
+        // (docs/traps.md).
+        let jobs = ProResJobs(root: Paths.jobs, encoder: ProcessEncoder.make(cli: Paths.helper("slipstream-cli")))
+        self.jobs = jobs
+        Task {
+            await jobs.observe { status in
+                Task { @MainActor [weak self] in self?.proresChanged(status) }
+            }
+            do {
+                try await jobs.load()
+                await jobs.cleanUp()
+                try await startLoopback(jobs)
+            } catch {
+                log.error("start: \(error.localizedDescription, privacy: .public)")
+                problem = "Der lokale Dienst für das Upload-Center startet nicht: \(error.localizedDescription)"
+            }
+        }
+        timers.append(Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in
+            Task { await jobs.cleanUp() }
+        })
+        timers.append(Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        })
+        startWorker()
+    }
+
+    private func startLoopback(_ jobs: ProResJobs) async throws {
+        let token = LoopbackAnnouncement.newToken()
+        let pairing = AppPairing { [weak self] _ in
+            await MainActor.run { self?.restartWorker() }
+        }
+        let api = LoopbackAPI(token: token, version: version, name: AppPairing.macName, jobs: jobs, pairing: pairing)
+        let server = LoopbackServer(api: api)
+        let port = try await server.start()
+        self.server = server
+        let note = LoopbackAnnouncement(port: port, token: token, pid: getpid(), version: version, name: AppPairing.macName)
+        try FileManager.default.createDirectory(at: Paths.appGroup, withIntermediateDirectories: true)
+        let file = Paths.appGroup.appendingPathComponent(SlipstreamIDs.loopbackFile)
+        try JSONEncoder().encode(note).write(to: file, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        log.info("loopback on 127.0.0.1:\(port)")
+    }
+
+    // MARK: - The worker
+
+    private func startWorker() {
+        guard AppPairing.storedTunnel() != nil else { connection = .notPaired; return }
+        guard WorkerProcess.isPresent else { connection = .noWorker; return }
+        do {
+            let key = try KeyStore.loadOrCreate()
+            let worker = WorkerProcess(onEvent: { event in
+                Task { @MainActor [weak self] in self?.handle(event) }
+            }, onExit: { status in
+                Task { @MainActor [weak self] in self?.workerExited(status) }
+            })
+            try worker.start(key: key, limits: limits, version: version)
+            self.worker = worker
+            connection = .down
+            if let until = pausedUntil { worker.send(.pause(until: until)) }
+        } catch {
+            log.error("worker: \(error.localizedDescription, privacy: .public)")
+            problem = "Der Worker startet nicht: \(error.localizedDescription)"
+            connection = .down
+        }
+    }
+
+    func restartWorker() {
+        let old = worker
+        worker = nil
+        Task {
+            await old?.quit(timeout: 10)
+            startWorker()
+        }
+    }
+
+    private func workerExited(_ status: Int32) {
+        guard worker != nil, worker?.isRunning == false else { return }
+        log.error("worker exited with \(status)")
+        worker = nil
+        queueJob = nil
+        connection = .down
+        keepAwake(false)
+        // Start it again a little later, unless the app is quitting.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.worker == nil, !self.quitting else { return }
+            self.startWorker()
+        }
+    }
+
+    private func handle(_ event: WorkerEvent) {
+        switch event {
+        case .connection(let up, let lastAnswerAt, let refused):
+            connection = up ? .up : .down
+            lastAnswer = lastAnswerAt ?? (up ? Date() : lastAnswer)
+            self.refused = refused
+        case .job(let job):
+            queueJob = job
+            keepAwake(true)
+        case .idle:
+            queueJob = nil
+            keepAwake(proresJob != nil)
+        case .log(_, let line):
+            appendLog(line)
+        case .result(let title, let verdict, let check):
+            addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
+        case .paused(let until):
+            setPause(until, tellWorker: false)
+        case .update(let latest):
+            updateAvailable = latest
+        case .tools(let tools):
+            self.tools = tools
+        }
+    }
+
+    // MARK: - ProRes
+
+    private func proresChanged(_ status: JobStatus) {
+        switch status.phase {
+        case .encoding, .checking:
+            proresJob = status
+            keepAwake(true)
+        case .ready, .failed:
+            if proresJob?.uploadId == status.uploadId {
+                proresJob = nil
+                addResult(ResultLine(title: "ProRes: \(status.name)",
+                                     verdict: status.phase == .ready ? "fertig" : "fehlgeschlagen",
+                                     check: status.error?.message, at: Date()))
+            }
+            keepAwake(queueJob != nil)
+        default:
+            break
+        }
+    }
+
+    // MARK: - Pause
+
+    func pause(for seconds: TimeInterval) {
+        setPause(Date().addingTimeInterval(seconds), tellWorker: true)
+    }
+
+    func resume() {
+        setPause(nil, tellWorker: true)
+    }
+
+    private func setPause(_ until: Date?, tellWorker: Bool) {
+        pausedUntil = until
+        defaults.set(until, forKey: "pausedUntil")
+        if tellWorker { worker?.send(until.map { .pause(until: $0) } ?? .resume) }
+    }
+
+    private func tick() {
+        if let until = pausedUntil, until <= Date() { setPause(nil, tellWorker: false) }
+    }
+
+    // MARK: - Bits
+
+    private func addResult(_ line: ResultLine) {
+        results.insert(line, at: 0)
+        results = Array(results.prefix(3))
+        if line.verdict == "accepted" || line.verdict == "fertig" {
+            if let day = defaults.object(forKey: "todayDate") as? Date, !Calendar.current.isDateInToday(day) {
+                finishedToday = 0
+            }
+            finishedToday += 1
+            defaults.set(Date(), forKey: "todayDate")
+            defaults.set(finishedToday, forKey: "todayCount")
+        }
+    }
+
+    private func appendLog(_ line: String) {
+        logLines.append(line)
+        if logLines.count > 1000 { logLines.removeFirst(logLines.count - 1000) }
+    }
+
+    /// The Mac stays awake while Slipstream holds a job (ADR-0007 §3).
+    private func keepAwake(_ on: Bool) {
+        if on, awake == nil {
+            awake = ProcessInfo.processInfo.beginActivity(options: [.idleSystemSleepDisabled, .userInitiated],
+                                                          reason: "Slipstream arbeitet an einem Auftrag")
+        } else if !on, let token = awake {
+            ProcessInfo.processInfo.endActivity(token)
+            awake = nil
+        }
+    }
+
+    // MARK: - Quit
+
+    private(set) var quitting = false
+
+    /// True while a job would be lost or given back by quitting.
+    var isBusy: Bool { queueJob != nil || proresJob != nil }
+
+    /// Gives the queue job back so the next worker starts at once, then lets the app go. A
+    /// ProRes job stays on disk and starts again at the next launch.
+    func shutDown() async {
+        quitting = true
+        server?.stop()
+        try? FileManager.default.removeItem(at: Paths.appGroup.appendingPathComponent(SlipstreamIDs.loopbackFile))
+        await worker?.quit(timeout: 15)
+        keepAwake(false)
+    }
+}

@@ -1,28 +1,31 @@
 # AGENTS.md
 
-Rules for agents changing this repository. [README.md](README.md) explains what ProRes Drop is
-and how to build it; read it next, then only the page your task needs. The server it feeds is
-built by the private `infra` repository (its own `AGENTS.md`, `docs/video.md`).
+Rules for agents changing this repository. [README.md](README.md) explains what Slipstream is
+and how to build it; read it next, then only the page your task needs. The server it helps is
+built by the private `infra` repository (its own `AGENTS.md`, `docs/video.md`); the design is
+ADR-0007 in `iphoneblog-wordpress`.
 
 ## 1. Always
 
 - **Write in English**, through `/anthropic-skills:plain-english`: pages, commit messages,
   answers to the maintainer. The app's screens, its messages and
   [docs/anleitung.md](docs/anleitung.md) are German, because its users read German.
-- **The server decides the format.** Every number in `Plan.swift` follows infra's
-  `roles/encoder/files/video-encode` and its decisions; [docs/encoding.md](docs/encoding.md)
-  names the source of each. Change a number there first, with the measurement that justifies it.
-  Never guess a different one: ask the maintainer.
+- **ADR-0007 decides the intermediate.** Every number in `Plan.swift` follows its §8 and the
+  measurements behind it; [docs/encoding.md](docs/encoding.md) names the source of each. Change
+  a number there first, with the measurement that justifies it (`bin/rungs.zsh`). Never guess a
+  different one: ask the maintainer. The tool versions follow `encoder` ([docs/tools.md](docs/tools.md)).
 - **The repository is public.** No secret, no internal hostname or address, no personal data, no
   person's or customer's name in code, pages or commit messages. Facts about the machines live
   in `infra`, which is private.
-- **Run `bin/package` before you push**: the tests, the release build, the signed bundle. CI
-  runs the same on every push and pull request; a red run is yours.
+- **Run `bin/package` before you push**: the tests, the Xcode build, the signed bundle (needs
+  `xcodegen`). CI runs the same on every push and pull request, and signs and notarises; a red
+  run is yours.
 - **Stage named paths.** Never `git add -A`, `git commit -a` or `git stash`.
-- **No signing identity without the maintainer's yes.** `bin/package` signs ad hoc. An Apple
-  Development certificate does not get past Gatekeeper on another Mac anyway.
-- **Never install anything on a user's Mac**, and never run the app against `~/Movies` on the
-  maintainer's (§4).
+- **Only CI signs with the Developer ID**, from repository secrets (decided 2026-10-26,
+  [docs/release.md](docs/release.md)). Locally `bin/package` signs ad hoc. Never handle the keys,
+  and never sign with the Apple Development certificate (team `2X64N8XML3`).
+- **Never install anything on a user's Mac**, and never pair the maintainer's Mac with the
+  queue for a test (§4).
 
 ## 2. Work in your own worktree
 
@@ -32,16 +35,16 @@ a restart):
 
 ```bash
 git -C <any checkout> fetch origin
-git -C <any checkout> worktree add ~/worktrees/prores-drop/<topic> -b <topic> origin/main
+git -C <any checkout> worktree add ~/worktrees/slipstream/<topic> -b <topic> origin/main
 ```
 
 - **Every change is a pull request onto `main`.** Squash only, so one pull request is one commit.
   Never push to `main`.
-- **A release is a tag `v<major>.<minor>`** on `main`, pushed after the merge:
-  `git tag -a v1.2 -m "ProRes Drop 1.2" origin/main && git push origin v1.2`. CI builds it and
-  publishes the release; never upload a build from a Mac by hand. `bin/package` reads the tag
-  into the bundle's version.
-- **When merged:** `git worktree remove ~/worktrees/prores-drop/<topic>` and
+- **A release is a tag `v<major>.<minor>.<patch>`** on `main`, pushed after the merge:
+  `git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1`. CI builds,
+  signs, notarises and publishes it; never upload a build from a Mac by hand. `bin/package`
+  reads the tag into the bundle's version. (`v1.2` is ProRes Drop's last release.)
+- **When merged:** `git worktree remove ~/worktrees/slipstream/<topic>` and
   `git branch -d <topic>`.
 
 ## 3. Commit messages
@@ -51,27 +54,28 @@ says why; where a number cost a measurement, the message keeps the measurement.
 
 ## 4. Tests and trying the app
 
-**No change to `DropCore` is finished without a test** (`Tests/DropCoreTests`, XCTest).
+**No change to `DropCore` or `HelperCore` is finished without a test** (`Tests/`, XCTest).
 
 - **A guard needs a test in which it fires**: a file that is not a video, a codec the Mac cannot
-  decode, a cancel, a name that is taken, an index at the end.
+  decode, a cancel, a wrong origin or token, a slice that does not fit, an index at the end.
 - **Media tests read real files.** `Tests/DropCoreTests/fixtures/make.sh` makes them with
   ffmpeg; they are committed because they are small. Run it only to change them.
 - **A change to the encode runs `bin/test-encode`** and puts its numbers into
   [docs/encoding.md](docs/encoding.md), "Measured", with the date and the Mac.
-- **Try the app without touching `~/Movies`**: start it with a test folder, then hand it files
-  the way the Dock does.
+- **Try the app** from `dist/` and talk to its loopback endpoint the way the bridge does; the
+  port and token are in the app group file:
 
   ```bash
-  open -n "dist/ProRes Drop.app" --args -destinationPath /path/to/test-folder
-  open -a "$PWD/dist/ProRes Drop.app" some.mov
-  /usr/bin/log show --last 5m --predicate 'subsystem == "io.github.prores-drop"'
+  open -n dist/Slipstream.app
+  cat ~/Library/Group\ Containers/W9N692KH39.io.github.iphoneblog-web.slipstream/loopback.json
+  curl -H 'Origin: safari-web-extension://x' -H "X-Slipstream-Token: $TOKEN" http://127.0.0.1:$PORT/v1/ping
+  /usr/bin/log show --last 5m --predicate 'subsystem == "io.github.iphoneblog-web.slipstream"'
   ```
 
-  `-destinationPath` is not stored. Quit the app by PID when done.
+  Quit the app by PID when done.
 
-Say in the pull request which tests cover the change and what is still untested; the Dock tile
-and the notification need a person looking at the screen.
+Say in the pull request which tests cover the change and what is still untested; the menu and
+Safari's extension settings need a person looking at the screen.
 
 ## 5. Documentation
 

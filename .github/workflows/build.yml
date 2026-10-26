@@ -1,13 +1,15 @@
-# Tests and builds every push and pull request on Apple Silicon. A tag `v*` also publishes the
-# build as a GitHub release: ProRes-Drop.dmg, ProRes-Drop.zip and SHA256SUMS, under names that
-# stay the same, so .../releases/latest/download/ProRes-Drop.dmg is always the newest.
+# Tests, builds, signs and notarises every push and pull request on Apple Silicon. A tag
+# `v<major>.<minor>.<patch>` also publishes the build as the GitHub release of that tag:
+# Slipstream.dmg, Slipstream.zip and SHA256SUMS, under names that stay the same, so
+# .../releases/latest/download/Slipstream.dmg is always the newest. docs/release.md.
 name: build
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags: ["v*.*.*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,6 +19,9 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write   # the release, on tags only
+    env:
+      # A pull request from a fork gets no secrets; it builds and signs ad hoc.
+      HAS_SECRETS: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,16 +32,74 @@ jobs:
           xcodebuild -version
           swift --version
           sysctl -n machdep.cpu.brand_string
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          command -v cmake pkg-config
 
-      - name: Test, build, pack
+      # ffmpeg, x265, x264 and whisper.cpp take about half an hour to build; they change only
+      # with bin/build-tools.
+      - uses: actions/cache@v4
+        id: tools
+        with:
+          path: build/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('bin/build-tools') }}
+
+      - name: Build the tools
+        if: steps.tools.outputs.cache-hit != 'true'
+        run: bin/build-tools
+
+      - name: Fetch the worker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bin/fetch-worker
+
+      - name: Signing identity and notary key
+        if: env.HAS_SECRETS == 'true'
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+        run: |
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          pw=$(uuidgen)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          print -r -- "$P12" | base64 -D > "$RUNNER_TEMP/id.p12"
+          # The .p12 has no password.
+          security import "$RUNNER_TEMP/id.p12" -k "$kc" -P "" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc" | grep -c "Developer ID Application"
+          # The key as the .p8 text, or base64 of it.
+          if [[ "$P8" == -----BEGIN* ]]; then print -r -- "$P8" > "$RUNNER_TEMP/notary.p8"
+          else print -r -- "$P8" | base64 -D > "$RUNNER_TEMP/notary.p8"; fi
+        shell: zsh {0}
+
+      - name: Test, build, sign, notarise, pack
+        env:
+          SIGN_IDENTITY: ${{ env.HAS_SECRETS == 'true' && 'Developer ID Application' || '-' }}
+          NOTARY_KEY: ${{ env.HAS_SECRETS == 'true' && format('{0}/notary.p8', runner.temp) || '' }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
         run: bin/package
+
+      - name: Verify the signed build
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          codesign --verify --strict --deep --verbose=2 dist/Slipstream.app
+          spctl -a -vv dist/Slipstream.app
+          xcrun stapler validate dist/Slipstream.app
+          xcrun stapler validate dist/Slipstream.dmg
+          spctl -a -vv -t open --context context:primary-signature dist/Slipstream.dmg
+          codesign -dv --verbose=2 dist/Slipstream.app 2>&1 | grep -E 'TeamIdentifier|Runtime|Timestamp'
+          ls dist/Slipstream.app/Contents/Helpers
 
       - uses: actions/upload-artifact@v4
         with:
-          name: prores-drop
+          name: slipstream
           path: |
-            dist/ProRes-Drop.dmg
-            dist/ProRes-Drop.zip
+            dist/Slipstream.dmg
+            dist/Slipstream.zip
             dist/SHA256SUMS
 
       - name: Publish the release
@@ -46,16 +109,21 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           {
-            echo "ProRes Drop ${TAG#v} for Macs with Apple Silicon, macOS 14 or later."
+            echo "Slipstream ${TAG#v} for Macs with Apple Silicon, macOS 14 or later."
             echo
-            echo "Download **ProRes-Drop.dmg**, open it and drag the app onto Programme."
-            echo "The app is signed ad hoc, not notarised: macOS blocks it once, and"
-            echo "System Settings → Privacy & Security → Open Anyway lets it in."
-            echo "Guide in German: [docs/anleitung.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/anleitung.md)."
+            echo "Download **Slipstream.dmg**, open it and drag the app onto Programme."
+            echo "Signed with a Developer ID and notarised. Install steps in German:"
+            echo "[README](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/README.md#installieren)."
             echo
             echo '```'
             cat dist/SHA256SUMS
             echo '```'
           } > notes.md
-          gh release create "$TAG" dist/ProRes-Drop.dmg dist/ProRes-Drop.zip dist/SHA256SUMS \
-            --title "ProRes Drop ${TAG#v}" --notes-file notes.md --verify-tag
+          gh release create "$TAG" dist/Slipstream.dmg dist/Slipstream.zip dist/SHA256SUMS \
+            --title "Slipstream ${TAG#v}" --notes-file notes.md --verify-tag --latest
+
+      - name: Remove the signing keychain
+        if: always() && env.HAS_SECRETS == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/notary.p8"

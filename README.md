@@ -1,66 +1,88 @@
-# prores-drop
+# Slipstream
 
-ProRes Drop is a small macOS app. Drop a ProRes export from Final Cut on its window or its Dock
-icon, and it makes a web-ready HEVC MP4 on the Mac's media engine: 4K at about 4.5 Mbit/s, Main
-10, index in front, the kind of file a video server can publish as it is, without encoding it
-again. A notification says when it is ready. One setting: the folder where finished files go.
+Slipstream is the helper app on a Mac for the iPhoneblog video server (ADR-0007 in
+iphoneblog-wordpress). It lives in the menu bar and does two things:
 
-**Download:** [ProRes-Drop.dmg](../../releases/latest/download/ProRes-Drop.dmg), the newest
-release, for Macs with Apple Silicon and macOS 14 or later. All releases:
-[Releases](../../releases). How to install it: [docs/anleitung.md](docs/anleitung.md), in German.
+- **ProRes in the upload center.** A ProRes file dropped into the upload center in Safari is
+  encoded on this Mac into an HEVC intermediate at 50 Mbit/s before the page uploads it
+  ([docs/encoding.md](docs/encoding.md)). Its Safari extension carries the file from the page to
+  the app and the result back ([docs/extension-protocol.md](docs/extension-protocol.md)).
+- **Jobs from the queue.** Once paired, it runs the queue's worker, which takes rungs and whisper
+  runs from `encoder` through its own WireGuard tunnel, at low priority
+  ([docs/worker.md](docs/worker.md)).
 
-The app talks to no server; it makes the file the server's rule asks for
-([docs/encoding.md](docs/encoding.md)).
+It was ProRes Drop, a drop window with its own 5 Mbit/s encode; that window is gone.
 
-| Page | Read it for |
-|---|---|
-| [docs/encoding.md](docs/encoding.md) | What comes out and why, the rate choice, the measurements |
-| [docs/anleitung.md](docs/anleitung.md) | The user's guide, in German: install, use, the one setting, errors |
-| [docs/TODO.md](docs/TODO.md) | Open work |
+**Download:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg), the newest
+release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later.
+
+## Installieren
+
+Für Alex, oder wer sonst ProRes ins Upload-Center zieht. Einmal pro Mac, etwa fünf Minuten.
+
+1. **DMG laden:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg). Öffnen und
+   **Slipstream** auf **Programme** ziehen. Danach das DMG im Finder auswerfen.
+2. **Slipstream starten:** in Programme doppelklicken. macOS fragt einmal, ob du eine App aus
+   dem Internet öffnen willst: **Öffnen**. Slipstream hat kein Fenster; es erscheint als
+   kleines Wind-Icon oben rechts in der Menüleiste.
+3. **Die Safari-Extension einschalten:** Safari → **Einstellungen …** → **Erweiterungen**, bei
+   **Slipstream** den Haken setzen. Safari fragt nach der Berechtigung für
+   `upload.iphoneblog.de`: **Immer erlauben** (oder „Auf dieser Website immer erlauben“).
+4. **Testen:** das Upload-Center in Safari öffnen (bzw. die Seite neu laden, falls sie schon
+   offen war) und eine kurze ProRes-Datei hineinziehen. Statt der Meldung „ProRes wird hier
+   nicht unterstützt“ zeigt die Seite jetzt den Fortschritt der Umwandlung.
+5. **Bei jedem Login automatisch starten** (empfohlen): Systemeinstellungen → **Allgemein** →
+   **Anmeldeobjekte** → unter „Beim Anmelden öffnen“ auf **+** und **Slipstream** wählen.
+
+Ein Update: wenn das Menü „Update verfügbar“ zeigt, das neue DMG laden und die App in Programme
+ersetzen. Die Extension bleibt eingeschaltet.
+
+Wichtig: Slipstream muss laufen, solange ProRes umgewandelt wird, und der Tab bleibt offen, bis
+der Upload durch ist. Schließt du ihn vorher, geht nichts verloren: Upload wieder öffnen, die
+Seite macht weiter. Was das Menü zeigt und was bei Fehlern hilft: [docs/anleitung.md](docs/anleitung.md).
 
 ## The code
 
-Swift 6 (language mode 5), SwiftUI, AVFoundation and VideoToolbox, macOS 14 or later, Apple
-Silicon. Swift Package Manager builds it; there is no Xcode project, so everything runs from the
-terminal. No dependency outside Apple's frameworks.
+Swift 6 (language mode 5), SwiftUI, AVFoundation, VideoToolbox, Network.framework; macOS 14 or
+later, Apple Silicon. The app and its Safari extension are an Xcode project made by `xcodegen`
+from `project.yml`, because only `xcodebuild` builds a Safari web extension; everything that
+needs no app is a Swift package (`swift test`).
 
 ```
-bin/package          tests, release build, ProRes Drop.app signed ad hoc, dist/ProRes-Drop.dmg and .zip
-bin/test-encode      a 4K ProRes sample through the app's encode, checked with ffprobe
-swift test           the tests (needs the fixtures below, which are committed)
-bin/make-icon        Resources/AppIcon.icns from tools/make-icon.swift
+bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
+bin/build-tools      ffmpeg, ffprobe, whisper-cli at encoder's versions into build/tools (docs/tools.md)
+bin/fetch-worker     the worker from kyrios/encode-queue's release into build/worker
+bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
+bin/rungs.zsh        ADR test 5: intermediates, the 4K rung from each, VMAF (docs/encoding.md)
+swift test           the tests (the fixtures are committed)
 ```
 
 ```
-Sources/DropCore/          the encode: Plan (size, rates), Transcoder, Naming, DropError, MP4Boxes
-Sources/ProResDrop/        the app: window, queue, Dock tile, notifications, Settings, destination
-Sources/prores-drop-cli/   the same encode from the terminal, for bin/test-encode and experiments
-Tests/DropCoreTests/       XCTest; fixtures/ holds small ffmpeg-made files (fixtures/make.sh)
-Resources/                 Info.plist, the icon, de.lproj
-tools/                     the icon drawing, the playability check
+Sources/DropCore/        the intermediate: Plan, Transcoder and its checks, Naming, DropError, MP4Boxes
+Sources/HelperCore/      the loopback endpoint (HTTP, routes), the ProRes jobs, the tunnel config and
+                         WireGuard key, the worker's events and commands, the encode process
+Sources/slipstream-cli/  the encode as a process: the app runs it at nice 19; also for bin/test-encode
+App/Slipstream/          the menu bar app: menu, settings, log, loopback listener, worker, keychain
+Extension/               the Safari web extension: native-messaging handler, content script, bridge
+Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made files (make.sh)
 ```
 
-`prores-drop-cli <file> --out <dir>` encodes one file and prints the result as JSON;
-`--avg`, `--peak` and `--window` try other rates without touching the app.
-
-## Releases
-
-A tag `v<major>.<minor>` on `main` is a release. `.github/workflows/build.yml` tests and builds
-every push on a GitHub macOS runner; on a tag it also publishes `ProRes-Drop.dmg`,
-`ProRes-Drop.zip` and `SHA256SUMS` as the release of that tag. The names carry no version, so
-the download link above always gets the newest. `bin/package` builds the same files locally.
-
-Users download the DMG and follow [docs/anleitung.md](docs/anleitung.md). The app is signed ad
-hoc, not with a Developer ID, so Gatekeeper blocks it once and the user lets it in through System
-Settings → Privacy & Security. Notarisation is in [docs/TODO.md](docs/TODO.md).
-
-Nothing in this repository installs anything; an agent never installs the app on a user's Mac.
+| Page | Read it for |
+|---|---|
+| [docs/encoding.md](docs/encoding.md) | The intermediate: what comes out, why 50 Mbit/s, the measurements |
+| [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the upload center, the extension and the app |
+| [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
+| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp at `encoder`'s versions |
+| [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |
+| [docs/traps.md](docs/traps.md) | Safari, priority, encoding and signing traps |
+| [docs/anleitung.md](docs/anleitung.md) | The user's guide, in German |
+| [docs/TODO.md](docs/TODO.md) | Open work |
 
 ## Where it logs
 
 ```
-/usr/bin/log show --last 1h --predicate 'subsystem == "io.github.prores-drop"'
+/usr/bin/log show --last 1h --predicate 'subsystem == "io.github.iphoneblog-web.slipstream"'
 ```
 
-One line per finished, failed or cancelled file, and whether macOS allows notifications. Type
-`/usr/bin/log`, not `log`: zsh has a builtin of that name.
+Type `/usr/bin/log`, not `log`: zsh has a builtin of that name. Its files are in
+`~/Library/Application Support/Slipstream` (the ProRes jobs, the tunnel, the worker's state).

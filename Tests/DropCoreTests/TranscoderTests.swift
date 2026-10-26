@@ -7,7 +7,7 @@ final class TranscoderTests: XCTestCase {
     private var out: URL!
 
     override func setUpWithError() throws {
-        out = FileManager.default.temporaryDirectory.appendingPathComponent("prores-drop-tests-\(UUID().uuidString)")
+        out = FileManager.default.temporaryDirectory.appendingPathComponent("slipstream-tests-\(UUID().uuidString)")
     }
 
     override func tearDownWithError() throws {
@@ -54,8 +54,8 @@ final class TranscoderTests: XCTestCase {
 
     func testProResBecomesHEVCMain10() async throws {
         let src = try fixture("prores-hq-320x180.mov")
-        let result = try await Transcoder(source: src, destinationFolder: out).run { _ in }
-        XCTAssertEqual(result.output.lastPathComponent, "prores-hq-320x180.mp4")
+        let result = try await Transcoder(source: src, output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
+        XCTAssertEqual(result.output.lastPathComponent, "intermediate.mp4")
         XCTAssertEqual(result.sourceCodec, "ProRes 422 HQ")
         let p = try await probe(result.output)
         XCTAssertEqual(p.codec, "hvc1")
@@ -69,11 +69,11 @@ final class TranscoderTests: XCTestCase {
         XCTAssertEqual(p.colour[kCMFormatDescriptionExtension_YCbCrMatrix as String], "ITU_R_709_2")
         XCTAssertTrue(try MP4Boxes.isFastStart(result.output))
         // Only the finished file in the folder: no temporary leftovers.
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: out.path), ["prores-hq-320x180.mp4"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: out.path), ["intermediate.mp4"])
     }
 
     func testPortraitMonoKeepsSizeAndGetsStereo() async throws {
-        let result = try await Transcoder(source: fixture("prores-portrait-mono.mov"), destinationFolder: out).run { _ in }
+        let result = try await Transcoder(source: fixture("prores-portrait-mono.mov"), output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
         let p = try await probe(result.output)
         XCTAssertEqual(p.width, 180)
         XCTAssertEqual(p.height, 320)
@@ -82,23 +82,33 @@ final class TranscoderTests: XCTestCase {
     }
 
     func testAbove4KIsScaledIntoTheBox() async throws {
-        let result = try await Transcoder(source: fixture("prores-proxy-5k.mov"), destinationFolder: out).run { _ in }
+        let result = try await Transcoder(source: fixture("prores-proxy-5k.mov"), output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
         let p = try await probe(result.output)
         XCTAssertEqual(p.width, 3840)
         XCTAssertEqual(p.height, 2160)
         XCTAssertNil(p.channels)
     }
 
-    func testSecondRunGetsANewName() async throws {
+    /// A second encode of the same job replaces the first file: the job's path is fixed.
+    func testSecondRunReplaces() async throws {
         let src = try fixture("prores-portrait-mono.mov")
-        _ = try await Transcoder(source: src, destinationFolder: out).run { _ in }
-        let second = try await Transcoder(source: src, destinationFolder: out).run { _ in }
-        XCTAssertEqual(second.output.lastPathComponent, "prores-portrait-mono 2.mp4")
+        let target = out.appendingPathComponent("intermediate.mp4")
+        _ = try await Transcoder(source: src, output: target).run { _ in }
+        let second = try await Transcoder(source: src, output: target).run { _ in }
+        XCTAssertEqual(second.output, target)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: out.path), ["intermediate.mp4"])
+    }
+
+    /// The rate the server wants: about 50 Mbit/s of video on a 4K source with motion.
+    func testRateIsTheIntermediates() async throws {
+        let result = try await Transcoder(source: fixture("prores-proxy-5k.mov"), output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
+        XCTAssertNil(result.plan.peakBitRate)
+        XCTAssertEqual(result.plan.averageBitRate, 50_000_000)
     }
 
     func testNotAVideo() async throws {
         do {
-            _ = try await Transcoder(source: fixture("not-a-video.mov"), destinationFolder: out).run { _ in }
+            _ = try await Transcoder(source: fixture("not-a-video.mov"), output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
             XCTFail("expected an error")
         } catch let error as DropError {
             XCTAssertEqual(error, .notAVideo)
@@ -108,7 +118,7 @@ final class TranscoderTests: XCTestCase {
 
     func testCodecTheMacCannotDecode() async throws {
         do {
-            _ = try await Transcoder(source: fixture("ffv1.mov"), destinationFolder: out).run { _ in }
+            _ = try await Transcoder(source: fixture("ffv1.mov"), output: out.appendingPathComponent("intermediate.mp4")).run { _ in }
             XCTFail("expected an error")
         } catch let error as DropError {
             XCTAssertEqual(error, .cannotDecodeVideo(codec: "FFV1"))
@@ -117,7 +127,7 @@ final class TranscoderTests: XCTestCase {
     }
 
     func testCancelLeavesNothing() async throws {
-        let job = Transcoder(source: try fixture("prores-proxy-5k.mov"), destinationFolder: out)
+        let job = Transcoder(source: try fixture("prores-proxy-5k.mov"), output: out.appendingPathComponent("intermediate.mp4"))
         job.cancel()
         do {
             _ = try await job.run { _ in }
@@ -129,7 +139,7 @@ final class TranscoderTests: XCTestCase {
     }
 
     func testCancelWhileRunning() async throws {
-        let job = Transcoder(source: try fixture("prores-hq-320x180.mov"), destinationFolder: out)
+        let job = Transcoder(source: try fixture("prores-hq-320x180.mov"), output: out.appendingPathComponent("intermediate.mp4"))
         let task = Task { try await job.run { fraction in if fraction > 0.2 { job.cancel() } } }
         do {
             _ = try await task.value

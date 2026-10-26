@@ -1,24 +1,29 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+// The code that needs no app around it, so `swift test` runs it on any Mac. The app and its Safari
+// extension are the Xcode project (project.yml), which uses the two libraries here.
 let package = Package(
-    name: "ProResDrop",
+    name: "Slipstream",
     defaultLocalization: "de",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "ProResDrop", targets: ["ProResDrop"]),
-        .executable(name: "prores-drop-cli", targets: ["prores-drop-cli"]),
+        .library(name: "DropCore", targets: ["DropCore"]),
+        .library(name: "HelperCore", targets: ["HelperCore"]),
+        .executable(name: "slipstream-cli", targets: ["slipstream-cli"]),
     ],
     targets: [
-        // The encode itself: plan, transcoder, names, messages. No UI, so the CLI and the tests
-        // run exactly what the app runs.
+        // The ProRes intermediate: plan, transcoder, checks, messages.
         .target(name: "DropCore", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .executableTarget(name: "ProResDrop", dependencies: ["DropCore"],
-                          swiftSettings: [.swiftLanguageMode(.v5)]),
-        .executableTarget(name: "prores-drop-cli", dependencies: ["DropCore"],
+        // The helper without its UI: the loopback endpoint, the ProRes jobs, the tunnel
+        // configuration, the worker's events.
+        .target(name: "HelperCore", dependencies: ["DropCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        .executableTarget(name: "slipstream-cli", dependencies: ["DropCore"],
                           swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "DropCoreTests", dependencies: ["DropCore"],
                     resources: [.copy("fixtures")],
+                    swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "HelperCoreTests", dependencies: ["HelperCore"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )

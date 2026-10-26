@@ -1,5 +1,6 @@
 @testable import DropCore
 import Foundation
+import VideoToolbox
 import XCTest
 
 final class PlanTests: XCTestCase {
@@ -21,33 +22,31 @@ final class PlanTests: XCTestCase {
         }
     }
 
-    func testBitRates() {
-        let k25 = Plan.make(width: 3840, height: 2160, frameRate: 25)
-        XCTAssertEqual(k25.averageBitRate, 5_000_000)
-        XCTAssertEqual(k25.peakBitRate, 6_000_000)
-        XCTAssertEqual(k25.peakWindow, 1)
-
-        // More frames do not buy more bits: 4K at 30 or 60 stays at the cap.
-        XCTAssertEqual(Plan.make(width: 3840, height: 2160, frameRate: 59.94).averageBitRate, 5_000_000)
-
-        // Fewer pixels times frames, a smaller share.
-        let hd25 = Plan.make(width: 1920, height: 1080, frameRate: 25)
-        XCTAssertEqual(hd25.averageBitRate, 1_250_000)
-        XCTAssertEqual(hd25.peakBitRate, 1_500_000)
-        XCTAssertEqual(Plan.make(width: 1920, height: 1080, frameRate: 50).averageBitRate, 2_500_000)
-        XCTAssertEqual(Plan.make(width: 3840, height: 2160, frameRate: 24).averageBitRate, 4_800_000)
-
-        // Above 4K counts at the size it is scaled to.
-        XCTAssertEqual(Plan.make(width: 5120, height: 2880, frameRate: 25).averageBitRate, 5_000_000)
+    /// ADR-0007 §8: 50 Mbit/s for every size and frame rate, an average alone, no peak.
+    func testIntermediateRate() {
+        for (w, h, fps) in [(3840, 2160, 25.0), (1920, 1080, 50), (5120, 2880, 24), (720, 1280, 30)] {
+            let plan = Plan.make(width: w, height: h, frameRate: fps)
+            XCTAssertEqual(plan.averageBitRate, 50_000_000, "\(w)x\(h)")
+            XCTAssertNil(plan.peakBitRate)
+        }
     }
 
     func testMissingFrameRateCountsAs25() {
         XCTAssertEqual(Plan.make(width: 3840, height: 2160, frameRate: 0).frameRate, 25)
     }
+
+    /// The compression settings carry a peak only when the plan has one (the CLI's --peak).
+    func testPeakOnlyWhenAsked() {
+        var plan = Plan.make(width: 1920, height: 1080, frameRate: 25)
+        XCTAssertNil(Transcoder.compression(plan)[kVTCompressionPropertyKey_DataRateLimits as String])
+        plan.peakBitRate = 8_000_000
+        let limits = Transcoder.compression(plan)[kVTCompressionPropertyKey_DataRateLimits as String] as? [Double]
+        XCTAssertEqual(limits, [1_000_000, 1])
+    }
 }
 
 final class NamingTests: XCTestCase {
-    let folder = URL(fileURLWithPath: "/Users/editor/Movies/ProRes Drop")
+    let folder = URL(fileURLWithPath: "/Users/editor/Movies/Slipstream")
 
     func testSameNameWithMp4() {
         let src = URL(fileURLWithPath: "/Users/editor/Desktop/Folge 245 Apple Event.mov")

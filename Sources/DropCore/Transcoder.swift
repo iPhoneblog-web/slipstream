@@ -17,12 +17,13 @@ public struct EncodeResult: Sendable {
     public var elapsed: Double
 }
 
-/// One file, ProRes in, HEVC Main 10 out (docs/encoding.md). AVAssetReader decodes, AVAssetWriter
-/// encodes on the Mac's media engine through VideoToolbox. The finished file is checked before
-/// it appears in the destination folder, and a half-written one never does.
+/// One file, ProRes in, the HEVC Main 10 intermediate out (docs/encoding.md). AVAssetReader
+/// decodes, AVAssetWriter encodes on the Mac's media engine through VideoToolbox. The finished
+/// file is checked before it appears at `output`, and a half-written one never does.
 public final class Transcoder: @unchecked Sendable {
     public let source: URL
-    public let destinationFolder: URL
+    /// Where the checked file goes. An older file there is replaced.
+    public let output: URL
     /// The CLI uses this to try other bit rates; the app never sets it.
     public var adjustPlan: ((EncodePlan) -> EncodePlan)?
 
@@ -32,9 +33,9 @@ public final class Transcoder: @unchecked Sendable {
     private var writer: AVAssetWriter?
     private var ends: PumpEnds?
 
-    public init(source: URL, destinationFolder: URL) {
+    public init(source: URL, output: URL) {
         self.source = source
-        self.destinationFolder = destinationFolder
+        self.output = output
     }
 
     public func cancel() {
@@ -93,8 +94,9 @@ public final class Transcoder: @unchecked Sendable {
                              frameRate: Double(nominalRate))
         if let adjust = adjustPlan { plan = adjust(plan) }
 
-        // Where it goes: a temporary directory on the destination's volume, then one move.
+        // Where it goes: a temporary directory on the output's volume, then one move.
         let fm = FileManager.default
+        let destinationFolder = output.deletingLastPathComponent()
         do {
             try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
         } catch {
@@ -108,8 +110,7 @@ public final class Transcoder: @unchecked Sendable {
             throw DropError.destinationUnavailable(path: destinationFolder.path)
         }
         defer { try? fm.removeItem(at: scratch) }
-        let finalName = Naming.outputURL(for: source, in: destinationFolder).lastPathComponent
-        let temp = scratch.appendingPathComponent(finalName)
+        let temp = scratch.appendingPathComponent(output.lastPathComponent)
 
         // Reader: 10-bit 4:2:0 frames straight from the decoder, float PCM for the audio.
         let reader: AVAssetReader
@@ -214,9 +215,9 @@ public final class Transcoder: @unchecked Sendable {
         let checked = try await Self.check(temp, expectedDuration: timeRange.duration.seconds,
                                            frameRate: plan.frameRate, hasAudio: audioIn != nil)
 
-        // Into place, under a name nobody took in the meantime.
-        let final = Naming.outputURL(for: source, in: destinationFolder)
+        let final = output
         do {
+            if fm.fileExists(atPath: final.path) { try fm.removeItem(at: final) }
             try fm.moveItem(at: temp, to: final)
         } catch {
             throw DropError.writeFailed(error.localizedDescription)
@@ -231,16 +232,18 @@ public final class Transcoder: @unchecked Sendable {
     // MARK: - Settings
 
     static func compression(_ plan: EncodePlan) -> [String: Any] {
-        let peakBytes = Double(plan.peakBitRate) / 8 * plan.peakWindow
-        return [
+        var settings: [String: Any] = [
             AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel as String,
             AVVideoAverageBitRateKey: plan.averageBitRate,
-            kVTCompressionPropertyKey_DataRateLimits as String: [peakBytes, plan.peakWindow],
             AVVideoExpectedSourceFrameRateKey: plan.frameRate,
             AVVideoMaxKeyFrameIntervalDurationKey: EncodePlan.keyFrameInterval,
             AVVideoAllowFrameReorderingKey: true,
             kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality as String: false,
         ]
+        if let peak = plan.peakBitRate {
+            settings[kVTCompressionPropertyKey_DataRateLimits as String] = [Double(peak) / 8 * plan.peakWindow, plan.peakWindow]
+        }
+        return settings
     }
 
     /// The source's colour tags, all three or none. Final Cut writes them (Rec. 709: 1-1-1).
@@ -351,7 +354,7 @@ private final class PumpEnds: @unchecked Sendable {
 /// append fails.
 private func pump(_ output: AVAssetReaderOutput, into input: AVAssetWriterInput, label: String,
                   ends: PumpEnds, onSample: ((CMTime) -> Void)?) {
-    let queue = DispatchQueue(label: "prores-drop.\(label)")
+    let queue = DispatchQueue(label: "slipstream.\(label)")
     var finished = false
     input.requestMediaDataWhenReady(on: queue) {
         guard !finished else { return }
