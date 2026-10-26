@@ -2,8 +2,8 @@
 
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
-`Contents/Helpers/encode-worker`, the macOS arm64 binary of its release (`bin/fetch-worker`,
-`v0.1.0`). It is the same program as `encoder`'s own worker. It talks to the queue through its
+`Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
+toolchain beside it (`bin/fetch-worker`, `v0.1.0`; [tools.md](tools.md)). It is the same program as `encoder`'s own worker. It talks to the queue through its
 own WireGuard tunnel (wireguard-go in userspace); Slipstream only starts it, feeds it, and shows
 what it reports. Without the binary, or before the Mac is paired, the app runs ProRes only.
 

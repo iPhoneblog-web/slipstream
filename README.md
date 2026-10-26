@@ -50,8 +50,7 @@ needs no app is a Swift package (`swift test`).
 
 ```
 bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
-bin/build-tools      ffmpeg, ffprobe, whisper-cli at encoder's versions into build/tools (docs/tools.md)
-bin/fetch-worker     the worker from kyrios/encode-queue's release into build/worker
+bin/fetch-worker     the worker and its tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's release
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
 bin/rungs.zsh        ADR test 5: intermediates, the 4K rung from each, VMAF (docs/encoding.md)
 swift test           the tests (the fixtures are committed)

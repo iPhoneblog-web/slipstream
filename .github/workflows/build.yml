@@ -33,36 +33,8 @@ jobs:
           swift --version
           sysctl -n machdep.cpu.brand_string
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
-          command -v cmake pkg-config
 
-      # ffmpeg, x265, x264 and whisper.cpp take about half an hour to build; they change only
-      # with bin/build-tools.
-      - uses: actions/cache@v4
-        id: tools
-        with:
-          path: build/tools
-          key: tools-${{ runner.os }}-${{ hashFiles('bin/build-tools') }}
-
-      - name: Build the tools
-        if: steps.tools.outputs.cache-hit != 'true'
-        run: bin/build-tools
-
-      # The tools alone, for ADR tests 2 and 3 on a Mac without the app.
-      - name: The tools' versions
-        run: |
-          cat build/tools/versions.txt
-          build/tools/ffmpeg -hide_banner -version | head -1
-          build/tools/ffmpeg -hide_banner -h encoder=libx265 | head -1
-          build/tools/ffmpeg -hide_banner -h encoder=libx264 | head -1
-          build/tools/whisper-cli --help 2>&1 | head -3 || true
-          (cd build/tools && shasum -a 256 ffmpeg ffprobe whisper-cli > SHA256SUMS && cat SHA256SUMS)
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tools-macos-arm64
-          path: build/tools
-
-      - name: Fetch the worker
+      - name: Fetch the worker and its tools
         env:
           GH_TOKEN: ${{ github.token }}
         run: bin/fetch-worker

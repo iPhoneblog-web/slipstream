@@ -5,7 +5,7 @@
 # Signs ad hoc unless SIGN_IDENTITY names an identity in the keychain (CI: "Developer ID
 # Application"). With NOTARY_KEY (path to the App Store Connect .p8), NOTARY_KEY_ID and
 # NOTARY_ISSUER it also notarises and staples the app and the disk image (docs/release.md).
-# The tools come from build/tools (bin/build-tools) and the worker from build/worker
+# The worker (build/worker) and its tools (build/tools) come from encode-queue's release
 # (bin/fetch-worker) when they are there; without them the app runs ProRes only.
 # The version is the last tag `v…` (0.0.0 before the first), the build number the commit count.
 set -euo pipefail

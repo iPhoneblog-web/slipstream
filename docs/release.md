@@ -17,8 +17,8 @@ release; the user installs it by hand.
 
 ## What CI does
 
-1. `bin/build-tools` when its cache misses ([tools.md](tools.md)); `bin/fetch-worker`
-   ([worker.md](worker.md)).
+1. `bin/fetch-worker`: the worker and its tools from encode-queue's release
+   ([worker.md](worker.md), [tools.md](tools.md)).
 2. Imports the Developer ID identity into a temporary keychain and writes the notary key to a
    file, both from repository secrets, and deletes both at the end.
 3. `bin/package`: tests, `xcodegen`, `xcodebuild`, the helpers into `Contents/Helpers`, and
