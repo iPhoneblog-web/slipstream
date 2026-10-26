@@ -65,7 +65,9 @@ last frame.
 
 **Alex's first real export decides** (ADR test 5): `bin/rungs.zsh` runs the table above on it.
 If the rung from the intermediate loses more than 1 point at 50 Mbit/s, the rate goes to the
-first of 60 and 80 that passes, here and in `Plan.swift`.
+first of 60 and 80 that passes, here and in `Plan.swift`. A warning sign: on a 2-s ProRes 422 HQ
+clip of 4K footage (M2 Max, 2026-10-26, when `bin/rungs.zsh` was added) 50 Mbit/s lost 1.37
+points and 80 Mbit/s 0.68; two seconds are too short to decide on.
 
 The ProRes Drop delivery encode (5 Mbit/s, remuxed as the 4K rung) is gone: on the alpaca
 clip it scored PSNR-Y 29.8 dB and SSIM 0.840, against 32.9 dB and 0.912 for x265 `slower`.
