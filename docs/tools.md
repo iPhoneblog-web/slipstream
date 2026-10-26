@@ -8,16 +8,14 @@ The queue offers a worker a job only when its tools match `encoder`'s exactly, a
 `SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe`, `whisper-cli` and `versions.txt`
 into `Contents/Helpers`. This repository builds no tool of its own.
 
-| tool | version on `encoder` (Debian 13) |
-|---|---|
-| ffmpeg, ffprobe | 7.1.5, `7.1.5-0+deb13u1` |
-| x265 | 4.1 |
-| x264 | 0.164.3108 31e19f9 |
-| whisper.cpp | v1.9.5, with Metal on the Mac |
+The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `whisper-cli`
+and `versions.txt`, static, whisper.cpp with Metal. Its versions are encode-queue's, the same on
+`encoder`'s worker image and on the Mac (at `v0.1.0`: ffmpeg 9.0.2, x265 4.2, x264 r3222,
+whisper.cpp v1.9.5); `versions.txt` names them, and About shows it. The Mac toolchain has no
+libass, so a Mac announces no fonts and gets no jobs with burnt-in captions.
 
-- **When `encoder` moves to another version**, encode-queue's toolchain follows, and a new
-  Slipstream embeds it. Until then the queue gives the Macs no rungs, and the menu says which
-  tool differs.
+- **When encode-queue's toolchain changes**, a new Slipstream embeds it. Until then the queue
+  gives the Macs no rungs, and the menu says which tool differs.
 - **ADR test 2 decides** whether a Mac's rung equals `encoder`'s: the same clip, the same rung,
   size within 1 %, SSIM and PSNR within 0.1.
 - **Licence:** ffmpeg with x264 and x265 is GPL v2 or later; encode-queue's release names its

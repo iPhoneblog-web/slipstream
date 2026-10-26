@@ -45,9 +45,10 @@ After it, one JSON object per line:
 
 Its standard error goes to the log window and to the unified log.
 
-**This contract was proposed to the encode-queue session on 2026-10-26.** Until its `v0.1.0`
-release exists the app ships without the worker; `HelperCore/WorkerProtocol.swift` and its tests
-hold the format. Where the released worker differs, this page and that file change to match it.
+encode-queue implements this contract (kyrios/encode-queue pull request 1). It sends `job` at
+every phase change and once a second, and reads whisper.cpp's version from the `versions.txt`
+beside `whisper-cli`. Until its `v0.1.0` release exists the app ships without the worker;
+`HelperCore/WorkerProtocol.swift` and its tests hold the format.
 
 ## Pairing
 
