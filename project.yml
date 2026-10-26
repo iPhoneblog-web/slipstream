@@ -36,8 +36,22 @@ targets:
       - App/Slipstream
       - path: Resources/AppIcon.icns
         buildPhase: resources
+    # xcodegen writes the Info.plist from these properties and its defaults, like the
+    # entitlements below.
     info:
       path: App/Slipstream/Info.plist
+      properties:
+        CFBundleDisplayName: Slipstream
+        CFBundleDevelopmentRegion: de
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleIconFile: AppIcon
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.video
+        LSUIElement: true
+        NSHumanReadableCopyright: iPhoneblog-web
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
     # xcodegen writes these files from `properties`; without them it writes them empty.
     entitlements:
       path: App/Slipstream/Slipstream.entitlements
@@ -65,6 +79,15 @@ targets:
         buildPhase: resources
     info:
       path: Extension/Info.plist
+      properties:
+        CFBundleDisplayName: Slipstream
+        CFBundleDevelopmentRegion: de
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
     entitlements:
       path: Extension/SlipstreamExtension.entitlements
       properties:
