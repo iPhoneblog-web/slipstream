@@ -39,6 +39,18 @@ public enum DropError: Error, Equatable, Sendable {
     }
 }
 
+extension DropError {
+    /// The extension protocol's error code (docs/extension-protocol.md, "Error codes").
+    public var code: String {
+        switch self {
+        case .notAVideo, .noVideoTrack: return "not-a-video"
+        case .cannotDecodeVideo, .cannotDecodeAudio, .protected: return "cannot-decode"
+        case .checkFailed: return "check-failed"
+        case .cancelled, .destinationUnavailable, .readFailed, .writeFailed: return "internal"
+        }
+    }
+}
+
 extension DropError: LocalizedError {
     public var errorDescription: String? { message }
 }

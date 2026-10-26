@@ -1,0 +1,106 @@
+# The Xcode project: `xcodegen` makes Slipstream.xcodeproj from this file (bin/package runs it).
+# Safari loads a web extension only from inside an app, and only xcodebuild builds that app
+# extension, so the app is an Xcode project; its code that needs no app lives in Package.swift.
+name: Slipstream
+options:
+  bundleIdPrefix: io.github.iphoneblog-web
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: de
+  createIntermediateGroups: true
+settings:
+  base:
+    # Thorsten's paid team. Never 2X64N8XML3, the free team his Apple Development certificate
+    # belongs to (docs/release.md).
+    DEVELOPMENT_TEAM: W9N692KH39
+    MARKETING_VERSION: "0.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    # bin/package signs, inside out, with the identity it is given (docs/release.md).
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: ""
+    DEAD_CODE_STRIPPING: YES
+    STRIP_INSTALLED_PRODUCT: YES
+    COPY_PHASE_STRIP: YES
+packages:
+  Slipstream:
+    path: .
+targets:
+  Slipstream:
+    type: application
+    platform: macOS
+    sources:
+      - App/Slipstream
+      - path: Resources/AppIcon.icns
+        buildPhase: resources
+    # xcodegen writes the Info.plist from these properties and its defaults, like the
+    # entitlements below.
+    info:
+      path: App/Slipstream/Info.plist
+      properties:
+        CFBundleDisplayName: Slipstream
+        CFBundleDevelopmentRegion: de
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleIconFile: AppIcon
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.video
+        LSUIElement: true
+        NSHumanReadableCopyright: iPhoneblog-web
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+    # xcodegen writes these files from `properties`; without them it writes them empty.
+    entitlements:
+      path: App/Slipstream/Slipstream.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - W9N692KH39.io.github.iphoneblog-web.slipstream
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream
+        PRODUCT_NAME: Slipstream
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: Slipstream
+        product: DropCore
+      - package: Slipstream
+        product: HelperCore
+      - target: SlipstreamExtension
+        embed: true
+  SlipstreamExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Extension/Handler
+      - path: Extension/Resources
+        buildPhase: resources
+    info:
+      path: Extension/Info.plist
+      properties:
+        CFBundleDisplayName: Slipstream
+        CFBundleDevelopmentRegion: de
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: Extension/SlipstreamExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - W9N692KH39.io.github.iphoneblog-web.slipstream
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream.extension
+        PRODUCT_NAME: Slipstream Extension
+        GENERATE_INFOPLIST_FILE: NO
+schemes:
+  Slipstream:
+    build:
+      targets:
+        Slipstream: all

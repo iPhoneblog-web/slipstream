@@ -1,50 +1,49 @@
-# ProRes Drop: Anleitung
+# Slipstream: Anleitung
 
-ProRes Drop macht aus einem ProRes-Export von Final Cut eine MP4-Datei fürs Web: HEVC in 4K mit
-etwa 4,5 Mbit/s, so klein, dass ein Videoserver sie ohne neues Kodieren veröffentlichen kann.
-Die App rechnet auf dem Media-Chip des Macs; auf einem M2 Max dauert eine Minute 4K etwa
-20 Sekunden.
+Slipstream wandelt ProRes-Dateien, die du ins Upload-Center ziehst, auf deinem Mac um, bevor
+sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
+Installieren: [README, „Installieren“](../README.md#installieren).
 
-## Installieren
+## ProRes hochladen
 
-1. [ProRes-Drop.dmg](../../../releases/latest/download/ProRes-Drop.dmg) laden und öffnen.
-2. **ProRes Drop** auf **Programme** ziehen. Danach das Fenster schließen und „ProRes Drop“ in
-   der Finder-Seitenleiste auswerfen.
-3. Einmal doppelklicken. macOS sagt, es könne die App nicht prüfen, weil sie nicht von einem
-   registrierten Entwickler kommt. Auf **Fertig** klicken.
-4. **Systemeinstellungen → Datenschutz & Sicherheit**, ganz nach unten: bei „ProRes Drop wurde
-   blockiert“ auf **Dennoch öffnen** klicken und mit dem Passwort bestätigen.
-5. Beim ersten Start fragt die App, ob sie Mitteilungen senden darf: **Erlauben**. Ohne
-   Mitteilungen erfährst du nicht, wann eine Datei fertig ist; das Fenster zeigt dann einen
-   Hinweis mit **Einschalten …**.
+- In Final Cut wie gewohnt als ProRes exportieren und die Datei ins Upload-Center ziehen, wie
+  jede andere.
+- Die Seite übergibt die Datei an Slipstream, Slipstream wandelt sie um (bei 10 Minuten 4K
+  etwa vier Minuten), dann lädt die Seite das Ergebnis hoch. Den Fortschritt zeigen die Seite
+  und das Symbol in der Menüleiste.
+- Den Tab offen lassen, bis der Upload durch ist. Wird er doch geschlossen: Upload wieder
+  öffnen, die Seite macht dort weiter, wo Slipstream steht.
+- Die ProRes-Datei behalten: sie ist die einzige Quelle, falls das Video je neu kodiert wird.
+  Slipstream löscht seine eigene Kopie, sobald der Upload fertig ist, und alles, was älter als
+  7 Tage ist.
 
-Danach startet die App wie jede andere. Für eine neue Version: wieder die DMG laden und die App
-in Programme ersetzen; die Einstellung bleibt.
+## Das Menü
 
-Die App braucht einen Mac mit Apple-Chip (M1 oder neuer) und macOS 14 oder neuer.
+- **Das Symbol** zeigt den Zustand: Wind (bereit), Wind mit Prozent (wandelt um), Pause-Kreis
+  (pausiert).
+- **Was gerade läuft:** Titel, Stufe oder „Whisper“, Prozent, Bilder pro Sekunde, Tempo,
+  Restzeit. Eine ProRes-Umwandlung steht hier auch.
+- **Die letzten Ergebnisse** und wie viele heute fertig wurden.
+- **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
+  nur für Aufträge des Encoders, nie für ProRes.
+- **Protokoll anzeigen …**, wenn etwas komisch aussieht.
+- **Verbindung:** Tunnel verbunden oder getrennt. „Nicht gekoppelt (nur ProRes)“ ist normal auf
+  einem Mac, der nur ProRes umwandelt.
+- **Einstellungen …:** CPU-Threads, ob Whisper die GPU nutzen darf, Aufträge gleichzeitig, der
+  Stand der Kopplung.
+- **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
 
-## Benutzen
-
-- In Final Cut wie gewohnt als ProRes exportieren (ProRes 422 oder 422 HQ, 4K).
-- Die Datei aufs Fenster ziehen oder aufs Symbol im Dock. Mehrere Dateien gehen auch; sie
-  laufen nacheinander.
-- Das Dock-Symbol zeigt den Fortschritt, die Zahl daran, wie viele Dateien noch offen sind.
-- Ist eine Datei fertig, kommt eine Mitteilung. **Im Finder zeigen** öffnet den Ordner mit der
-  fertigen Datei.
-- Die fertige `.mp4` hochladen. Die ProRes-Datei brauchst du dafür nicht mehr.
-
-Der Mac schläft während der Umwandlung nicht ein.
-
-## Einstellung
-
-Es gibt genau eine: **ProRes Drop → Einstellungen …** (⌘,) legt fest, wohin die fertigen
-Dateien kommen. Vorgabe ist `Filme/ProRes Drop`; fehlt der Ordner, legt die App ihn an. Eine
-vorhandene Datei wird nie überschrieben: die zweite heißt dann `Folge 123 2.mp4`.
+Slipstream rechnet mit niedriger Priorität: was du am Mac tust, geht vor. Der Mac schläft nicht
+ein, solange Slipstream einen Auftrag hat.
 
 ## Wenn etwas schiefgeht
 
+- **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream läuft nicht (kein Symbol
+  in der Menüleiste) oder die Extension ist aus (Safari → Einstellungen → Erweiterungen). Dann
+  die Seite neu laden.
 - **„Das ist keine Videodatei.“** oder **„Dieses Videoformat (…) kann der Mac nicht lesen.“**:
-  Die Datei ist kein Video, das macOS öffnen kann. Neu aus Final Cut exportieren.
-- **„Der Zielordner ist nicht erreichbar“**: Der Ordner liegt auf einem Laufwerk, das nicht
-  angeschlossen ist. In den Einstellungen einen anderen wählen.
-- Alles andere: ein [Issue](../../../issues) öffnen, mit einem Bildschirmfoto der Meldung.
+  Neu aus Final Cut exportieren.
+- **„Auf dem Mac ist kein Platz mehr frei.“**: Platz schaffen; 10 Minuten 4K brauchen etwa
+  50 GB für die Kopie und 4 GB für das Ergebnis.
+- Alles andere: ein [Issue](../../../issues) öffnen, mit einem Bildschirmfoto und den Zeilen aus
+  „Protokoll anzeigen“.
