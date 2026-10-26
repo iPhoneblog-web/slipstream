@@ -63,6 +63,9 @@ for b in "$appex" "$app"; do
   codesign -d --entitlements - --xml "$b" 2>/dev/null | grep -q W9N692KH39.io.github.iphoneblog-web.slipstream
 done
 
+# Apple's ticket service drops connections from CI runners now and then (error 68, "The network
+# connection was lost"); the stapler tries again.
+again() { for i in 1 2 3 4 5; do "$@" && return 0; print "retry $i: $*" >&2; sleep 20; done; return 1; }
 notarise() {  # file
   xcrun notarytool submit "$1" --key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" \
     --wait --timeout 30m --output-format json | tee dist/notary.json
@@ -72,7 +75,7 @@ if [[ -n ${NOTARY_KEY:-} ]]; then
   ditto -c -k --keepParent "$app" dist/notarise.zip
   notarise dist/notarise.zip
   rm dist/notarise.zip
-  xcrun stapler staple "$app"
+  again xcrun stapler staple "$app"
 fi
 
 # The disk image: the app and a link to /Applications, to drag it across.
@@ -85,8 +88,8 @@ rm -rf "$stage"
 if [[ $identity != - ]]; then codesign --force --sign "$identity" --timestamp dist/Slipstream.dmg; fi
 if [[ -n ${NOTARY_KEY:-} ]]; then
   notarise dist/Slipstream.dmg
-  xcrun stapler staple dist/Slipstream.dmg
-  xcrun stapler validate dist/Slipstream.dmg
+  again xcrun stapler staple dist/Slipstream.dmg
+  again xcrun stapler validate dist/Slipstream.dmg
   spctl -a -vv -t open --context context:primary-signature dist/Slipstream.dmg
   rm -f dist/notary.json
 fi
