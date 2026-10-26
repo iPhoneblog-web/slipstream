@@ -56,6 +56,12 @@ for f in "$helpers"/*(.x); do sign "$f"; done
 sign --entitlements Extension/SlipstreamExtension.entitlements "$appex"
 sign --entitlements App/Slipstream/Slipstream.entitlements "$app"
 codesign --verify --strict --deep --verbose=2 "$app"
+# Safari runs no extension without its sandbox, and the extension finds the app only through
+# the app group (xcodegen once wrote both entitlements files empty).
+codesign -d --entitlements - --xml "$appex" 2>/dev/null | grep -q com.apple.security.app-sandbox
+for b in "$appex" "$app"; do
+  codesign -d --entitlements - --xml "$b" 2>/dev/null | grep -q W9N692KH39.io.github.iphoneblog-web.slipstream
+done
 
 notarise() {  # file
   xcrun notarytool submit "$1" --key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" \

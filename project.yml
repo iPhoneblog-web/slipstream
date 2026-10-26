@@ -38,8 +38,12 @@ targets:
         buildPhase: resources
     info:
       path: App/Slipstream/Info.plist
+    # xcodegen writes these files from `properties`; without them it writes them empty.
     entitlements:
       path: App/Slipstream/Slipstream.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - W9N692KH39.io.github.iphoneblog-web.slipstream
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream
@@ -63,6 +67,10 @@ targets:
       path: Extension/Info.plist
     entitlements:
       path: Extension/SlipstreamExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - W9N692KH39.io.github.iphoneblog-web.slipstream
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream.extension
