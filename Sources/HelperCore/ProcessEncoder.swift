@@ -13,13 +13,24 @@ public enum ProcessEncoder {
             process.standardOutput = stdout
             process.standardError = FileHandle.nullDevice
             let parser = Parser(progress: progress)
-            stdout.fileHandleForReading.readabilityHandler = { handle in
-                parser.feed(handle.availableData)
+            // One reader to the end of the output, so the last line (the result or the error)
+            // is read before the outcome, however the exit and the reads interleave.
+            let reader = Thread {
+                let handle = stdout.fileHandleForReading
+                while true {
+                    let data = handle.availableData
+                    if data.isEmpty { break }
+                    parser.feed(data)
+                }
+                parser.finish()
             }
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
                     process.terminationHandler = { _ in done.resume() }
-                    do { try process.run() } catch {
+                    do {
+                        try process.run()
+                        reader.start()
+                    } catch {
                         process.terminationHandler = nil
                         done.resume(throwing: error)
                     }
@@ -27,8 +38,7 @@ public enum ProcessEncoder {
             } onCancel: {
                 process.terminate()
             }
-            stdout.fileHandleForReading.readabilityHandler = nil
-            parser.feed(stdout.fileHandleForReading.readDataToEndOfFile())
+            await parser.drained()
             if Task.isCancelled { throw JobError("internal", "Abgebrochen.") }
             return try parser.outcome()
         }
@@ -41,6 +51,8 @@ public enum ProcessEncoder {
         private var result: [String: Any]?
         private var error: JobError?
         private let progress: @Sendable (EncodeProgress) -> Void
+        private var ended = false
+        private var waiting: CheckedContinuation<Void, Never>?
 
         init(progress: @escaping @Sendable (EncodeProgress) -> Void) {
             self.progress = progress
@@ -58,6 +70,27 @@ public enum ProcessEncoder {
                 } else if let e = object["error"] as? [String: Any] {
                     lock.withLock { error = JobError(e["code"] as? String ?? "internal", e["message"] as? String ?? "") }
                 }
+            }
+        }
+
+        /// The output reached its end.
+        func finish() {
+            let w = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+                ended = true
+                defer { waiting = nil }
+                return waiting
+            }
+            w?.resume()
+        }
+
+        func drained() async {
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                let now = lock.withLock { () -> Bool in
+                    if ended { return true }
+                    waiting = c
+                    return false
+                }
+                if now { c.resume() }
             }
         }
 
