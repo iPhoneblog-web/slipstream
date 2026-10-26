@@ -24,12 +24,15 @@ enum Paths {
             .appendingPathComponent("Library/Group Containers/\(SlipstreamIDs.appGroup)", isDirectory: true)
     }
 
-    /// The tools inside the app: `Contents/Helpers`. `SLIPSTREAM_WORKER` points at another
-    /// worker, for trying the app with a stand-in.
+    /// The tools inside the app: `Contents/Helpers`. In a debug build `SLIPSTREAM_WORKER`
+    /// points at a stand-in worker; never in a release, where it would hand the private key to
+    /// whatever binary the environment names.
     static func helper(_ name: String) -> URL {
+        #if DEBUG
         if name == "encode-worker", let path = ProcessInfo.processInfo.environment["SLIPSTREAM_WORKER"] {
             return URL(fileURLWithPath: path)
         }
+        #endif
         return Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/\(name)")
     }
 }

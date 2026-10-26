@@ -111,17 +111,30 @@ public actor ProResJobs {
     public let root: URL
     private let encoder: IntermediateEncoder
     private let now: @Sendable () -> Date
+    private let freeSpace: @Sendable (URL) -> Int64?
     private var records: [String: Record] = [:]
     private var waiting: [String] = []
     private var running: (id: String, task: Task<Void, Never>, started: Date)?
     private var onChange: (@Sendable (JobStatus) -> Void)?
 
     public init(root: URL, encoder: @escaping IntermediateEncoder = ProResJobs.videoToolbox,
-                now: @escaping @Sendable () -> Date = { Date() }) {
+                now: @escaping @Sendable () -> Date = { Date() },
+                freeSpace: @escaping @Sendable (URL) -> Int64? = ProResJobs.availableCapacity) {
         self.root = root
         self.encoder = encoder
         self.now = now
+        self.freeSpace = freeSpace
     }
+
+    /// What the volume of `url` can still take, by the system's count for files the user wants.
+    public static let availableCapacity: @Sendable (URL) -> Int64? = { url in
+        (try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage
+    }
+
+    /// Room a source of `size` bytes needs: the copy, the intermediate (at 50 Mbit/s an eighth
+    /// of ProRes 422 at its lightest is generous), and 1 GiB to spare.
+    static func roomNeeded(_ size: Int64) -> Int64 { size + size / 8 + 1 << 30 }
 
     /// The menu bar's view of the jobs; called on every change, progress included.
     public func observe(_ callback: @escaping @Sendable (JobStatus) -> Void) {
@@ -182,6 +195,10 @@ public actor ProResJobs {
                 throw JobError("file-mismatch", "Unter diesem Upload liegt eine andere Datei.")
             }
             return withMissing(r)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        if let free = freeSpace(root), free < Self.roomNeeded(size) {
+            throw JobError("disk-full", "Auf dem Mac ist kein Platz mehr frei.")
         }
         let ext = (name as NSString).pathExtension.lowercased()
         let sourceName = "source." + (["mov", "mp4", "m4v", "qt"].contains(ext) ? ext : "mov")

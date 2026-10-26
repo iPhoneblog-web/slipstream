@@ -2,6 +2,9 @@
 # Builds Slipstream.app for Apple Silicon and packs it for download:
 #   bin/package            tests, build, dist/Slipstream.dmg, dist/Slipstream.zip, dist/SHA256SUMS
 #   bin/package --no-test  build only
+#   bin/package --check    also the extension's frame self-test (Extension/Check), for the
+#                          wp-admin check with the signed extension: dist/Slipstream-check.*.
+#                          A release never carries it (docs/traps.md, "Checks").
 # Signs ad hoc unless SIGN_IDENTITY names an identity in the keychain (CI: "Developer ID
 # Application"). With NOTARY_KEY (path to the App Store Connect .p8), NOTARY_KEY_ID and
 # NOTARY_ISSUER it also notarises and staples the app and the disk image (docs/release.md).
@@ -11,7 +14,17 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 
-if [[ "${1:-}" != "--no-test" ]]; then
+test=1 check=0
+for a in "$@"; do
+  case $a in
+    --no-test) test=0 ;;
+    --check) check=1 ;;
+    *) print "unknown option $a" >&2; exit 64 ;;
+  esac
+done
+name=Slipstream
+(( check )) && name=Slipstream-check
+if (( test )); then
   swift test
 fi
 
@@ -33,7 +46,18 @@ mkdir -p dist
 ditto build/dd/Build/Products/Release/Slipstream.app "$app"
 sed -i '' "s/\"version\": \"0.0.0\"/\"version\": \"$version\"/" "$appex/Contents/Resources/manifest.json"
 plutil -lint "$app/Contents/Info.plist" "$appex/Contents/Info.plist" >/dev/null
+if (( check )); then
+  cp Extension/Check/selftest.js "$appex/Contents/Resources/"
+  python3 -I -c 'import json,sys
+p=sys.argv[1]; m=json.load(open(p)); m["content_scripts"][0]["js"].append("selftest.js")
+json.dump(m, open(p, "w"), indent=2)' "$appex/Contents/Resources/manifest.json"
+fi
 python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$appex/Contents/Resources/manifest.json"
+# The self-test only where it was asked for.
+if (( ! check )) && grep -q selftest "$appex/Contents/Resources/manifest.json" "$appex/Contents/Resources/"*.js; then
+  print "the self-test is in a release build" >&2
+  exit 1
+fi
 
 # Contents/Helpers: the ProRes encode (always), the worker and its tools (when built).
 helpers="$app/Contents/Helpers"
@@ -88,19 +112,19 @@ stage="dist/dmg"
 mkdir -p "$stage"
 ditto "$app" "$stage/Slipstream.app"
 ln -s /Applications "$stage/Programme"
-hdiutil create -quiet -volname "Slipstream $version" -srcfolder "$stage" -fs HFS+ -format UDZO -ov dist/Slipstream.dmg
+hdiutil create -quiet -volname "$name $version" -srcfolder "$stage" -fs HFS+ -format UDZO -ov dist/$name.dmg
 rm -rf "$stage"
-if [[ $identity != - ]]; then codesign --force --sign "$identity" --timestamp dist/Slipstream.dmg; fi
+if [[ $identity != - ]]; then codesign --force --sign "$identity" --timestamp dist/$name.dmg; fi
 if [[ -n ${NOTARY_KEY:-} ]]; then
-  notarise dist/Slipstream.dmg
-  again xcrun stapler staple dist/Slipstream.dmg
-  again xcrun stapler validate dist/Slipstream.dmg
-  spctl -a -vv -t open --context context:primary-signature dist/Slipstream.dmg
+  notarise dist/$name.dmg
+  again xcrun stapler staple dist/$name.dmg
+  again xcrun stapler validate dist/$name.dmg
+  spctl -a -vv -t open --context context:primary-signature dist/$name.dmg
   rm -f dist/notary.json
 fi
-hdiutil verify -quiet dist/Slipstream.dmg
+hdiutil verify -quiet dist/$name.dmg
 
-(cd dist && ditto -c -k --sequesterRsrc --keepParent Slipstream.app Slipstream.zip)
-(cd dist && shasum -a 256 Slipstream.dmg Slipstream.zip > SHA256SUMS)
+(cd dist && ditto -c -k --sequesterRsrc --keepParent Slipstream.app $name.zip)
+(cd dist && shasum -a 256 $name.dmg $name.zip > SHA256SUMS)
 echo "version $version, build $build, signed by ${identity/-/ad hoc}"
 cat dist/SHA256SUMS

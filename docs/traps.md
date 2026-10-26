@@ -47,3 +47,13 @@ Things that cost time once, so they cost it only once. Each says what happens an
   `2X64N8XML3`, the Developer ID to `W9N692KH39`. The project sets `W9N692KH39`; a build signed
   with the other team's certificate gets a different extension id in Safari and cannot read the
   keychain item of the first.
+
+## Checks
+
+**The extension's two checks** (ADR-0007 test 1, the part that needs the signed extension):
+the bridge inside wp-admin's frame and under the upload center's real page and CSP, and the
+intermediate fetched back in 64 MiB `Range` slices through the bridge. The frame check needs
+code inside the upload center's frame, which wp-admin's page cannot script, so it uses the
+**check build** (`bin/package --check`, CI artifact `slipstream-check`): its content script
+answers a `selftest` message from `https://www.iphoneblog.de` with timings. Any page of that
+origin could drive it, so a release never carries it, and `bin/package` fails if one does.

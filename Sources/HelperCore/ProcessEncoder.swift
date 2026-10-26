@@ -24,23 +24,50 @@ public enum ProcessEncoder {
                 }
                 parser.finish()
             }
+            // A cancel can come before the launch: `terminate()` on a process that never ran
+            // raises and ends the app. So one flag under one lock: never launch once
+            // cancelled, terminate only once launched.
+            let launch = Launch()
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
                     process.terminationHandler = { _ in done.resume() }
                     do {
-                        try process.run()
-                        reader.start()
+                        try launch.run {
+                            try process.run()
+                            reader.start()
+                        }
                     } catch {
                         process.terminationHandler = nil
                         done.resume(throwing: error)
                     }
                 }
             } onCancel: {
-                process.terminate()
+                launch.cancel { process.terminate() }
             }
             await parser.drained()
             if Task.isCancelled { throw JobError("internal", "Abgebrochen.") }
             return try parser.outcome()
+        }
+    }
+
+    final class Launch: @unchecked Sendable {
+        private let lock = NSLock()
+        private var launched = false
+        private var cancelled = false
+
+        func run(_ start: () throws -> Void) throws {
+            try lock.withLock {
+                if cancelled { throw JobError("internal", "Abgebrochen.") }
+                try start()
+                launched = true
+            }
+        }
+
+        func cancel(_ stop: () -> Void) {
+            lock.withLock {
+                cancelled = true
+                if launched { stop() }
+            }
         }
     }
 

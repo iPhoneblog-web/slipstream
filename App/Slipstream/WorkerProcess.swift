@@ -20,6 +20,7 @@ final class WorkerProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var lines = LineBuffer()
 
+    let id = UUID()
     let onEvent: @Sendable (WorkerEvent) -> Void
     let onExit: @Sendable (Int32) -> Void
 
@@ -75,8 +76,15 @@ final class WorkerProcess: @unchecked Sendable {
         write(command.line)
     }
 
+    /// Fails quietly once the worker is gone: SIGPIPE is ignored (AppDelegate), so the write
+    /// throws EPIPE, and the exit handler restarts the worker.
     private func write(_ text: String) {
-        try? input.fileHandleForWriting.write(contentsOf: Data(text.utf8))
+        guard process.isRunning else { return }
+        do {
+            try input.fileHandleForWriting.write(contentsOf: Data(text.utf8))
+        } catch {
+            log.error("worker input: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     var isRunning: Bool { process.isRunning }

@@ -50,6 +50,27 @@ final class ProcessEncoderTests: XCTestCase {
         }
     }
 
+    /// The guard fires: a cancel before the launch never terminates a process that did not run
+    /// (that raised and ended the app). Open, receive, delete, 50 times.
+    func testCancelBeforeLaunch() async throws {
+        let encode = ProcessEncoder.make(cli: try cli())
+        for _ in 0..<50 {
+            let task = Task { try await encode(fixture("prores-hq-320x180.mov"), out.appendingPathComponent("i.mp4")) { _ in } }
+            task.cancel()
+            _ = try? await task.value
+        }
+        let jobs = ProResJobs(root: out.appendingPathComponent("jobs"), encoder: encode)
+        try await jobs.load()
+        let data = try Data(contentsOf: fixture("prores-hq-320x180.mov"))
+        for i in 0..<50 {
+            _ = try await jobs.open(id: "c\(i)", name: "a.mov", size: Int64(data.count), lastModified: nil)
+            _ = try await jobs.receive(id: "c\(i)", range: 0..<Int64(data.count), total: Int64(data.count), data: data)
+            try await jobs.delete(id: "c\(i)")
+        }
+        let left = await jobs.list()
+        XCTAssertEqual(left.count, 0)
+    }
+
     /// A cancelled task ends the process and leaves no file.
     func testCancel() async throws {
         let encode = ProcessEncoder.make(cli: try cli())

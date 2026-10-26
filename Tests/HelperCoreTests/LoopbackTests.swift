@@ -216,6 +216,21 @@ final class LoopbackTests: XCTestCase {
         XCTAssertEqual(left, ["new"])
     }
 
+    /// The guard fires: a file that does not fit on the disk is refused at open, before a slice.
+    func testDiskFullAtOpen() async throws {
+        let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying, freeSpace: { _ in 10 << 30 })
+        try await jobs.load()
+        do {
+            _ = try await jobs.open(id: "big", name: "a.mov", size: 9 << 30, lastModified: nil)
+            XCTFail("expected disk-full")
+        } catch let e as JobError {
+            XCTAssertEqual(e.code, "disk-full")
+            XCTAssertEqual(e.status, 507)
+        }
+        let small = try await jobs.open(id: "small", name: "a.mov", size: 1 << 30, lastModified: nil)
+        XCTAssertEqual(small.phase, .receiving)
+    }
+
     /// The real encode behind the store: a ProRes fixture becomes a checked hvc1 intermediate.
     func testVideoToolboxEncode() async throws {
         let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A write to a worker that just died must fail with EPIPE, not end the app.
+        signal(SIGPIPE, SIG_IGN)
         model.start()
     }
 

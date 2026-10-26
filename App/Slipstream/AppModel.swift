@@ -3,6 +3,11 @@ import Foundation
 import HelperCore
 import os
 
+/// The worker's id for its own callbacks, set once the worker exists.
+private final class WorkerBox: @unchecked Sendable {
+    var id: UUID?
+}
+
 /// Everything the menu shows, and the pieces behind it: the loopback endpoint with the ProRes
 /// jobs, and the worker for the queue's jobs (ADR-0007 §9).
 @MainActor
@@ -121,15 +126,22 @@ final class AppModel: ObservableObject {
     // MARK: - The worker
 
     private func startWorker() {
+        // One worker per key: two workers on one WireGuard key fight over the tunnel.
+        guard worker == nil, !quitting else { return }
         guard AppPairing.storedTunnel() != nil else { connection = .notPaired; return }
         guard WorkerProcess.isPresent else { connection = .noWorker; return }
         do {
             let key = try KeyStore.loadOrCreate()
+            let box = WorkerBox()
             let worker = WorkerProcess(onEvent: { event in
-                Task { @MainActor [weak self] in self?.handle(event) }
+                Task { @MainActor [weak self] in
+                    guard let self, self.worker?.id == box.id else { return }
+                    self.handle(event)
+                }
             }, onExit: { status in
-                Task { @MainActor [weak self] in self?.workerExited(status) }
+                Task { @MainActor [weak self] in self?.workerExited(id: box.id, status) }
             })
+            box.id = worker.id
             try worker.start(key: key, limits: limits, version: version)
             self.worker = worker
             connection = .down
@@ -141,17 +153,24 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private var restarting: Task<Void, Never>?
+
+    /// Pairing again restarts the worker with the new tunnel. Restarts run one after another,
+    /// so two quick pairings never leave two workers on one key.
     func restartWorker() {
-        let old = worker
-        worker = nil
-        Task {
+        let previous = restarting
+        restarting = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            let old = self.worker
+            self.worker = nil
             await old?.quit(timeout: 10)
-            startWorker()
+            self.startWorker()
         }
     }
 
-    private func workerExited(_ status: Int32) {
-        guard worker != nil, worker?.isRunning == false else { return }
+    private func workerExited(id: UUID?, _ status: Int32) {
+        guard let current = worker, current.id == id, !current.isRunning else { return }
         log.error("worker exited with \(status)")
         worker = nil
         queueJob = nil
