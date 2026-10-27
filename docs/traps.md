@@ -22,6 +22,19 @@ Things that cost time once, so they cost it only once. Each says what happens an
 - **`curl` waits a second per request** for `100 Continue` when it sends a large body; the
   loopback answers it. Safari does not send `Expect`.
 
+- **Safari runs the content script only on a site the user allowed for the extension**, and a
+  new build of the app registers the extension anew: after replacing 1.0.0 with 1.0.1 the upload
+  center got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
+  Allow `upload.iphoneblog.de` again in Safari → Einstellungen → Erweiterungen → Slipstream. The
+  menu's line "Safari-Extension" says whether the extension reached the app since it started.
+
+## The menu bar app
+
+- **`SettingsLink` and SwiftUI's `Settings` scene do not open from a menu bar app's menu**
+  (`LSUIElement`, so never the active app): "Einstellungen …" did nothing in 1.0.1. Settings and
+  the log are windows AppKit owns (`Windows` in `SlipstreamApp.swift`), opened after
+  `NSApp.activate`. `bin/check-launch` opens Settings through the same path in CI.
+
 ## Priority
 
 - **macOS's `background` quality of service keeps a process on the efficiency cores**, which

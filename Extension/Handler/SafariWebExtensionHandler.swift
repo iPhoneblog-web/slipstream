@@ -11,6 +11,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     /// SlipstreamIDs in HelperCore; repeated here so the extension links no package.
     static let appGroup = "W9N692KH39.io.github.iphoneblog-web.slipstream"
     static let loopbackFile = "loopback.json"
+    static let extensionSeenFile = "extension-seen"
 
     private struct Announcement: Decodable {
         var port: Int
@@ -27,6 +28,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             let response = NSExtensionItem()
             response.userInfo = [SFExtensionMessageKey: answer]
             context.completeRequest(returningItems: [response], completionHandler: nil)
+        }
+        // The app's menu shows whether Safari's extension reaches it: one file's time.
+        if let dir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroup) {
+            let marker = dir.appendingPathComponent(Self.extensionSeenFile)
+            if !FileManager.default.createFile(atPath: marker.path, contents: Data()) {
+                try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: marker.path)
+            }
         }
         switch message?["type"] as? String {
         case "presence":

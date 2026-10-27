@@ -29,13 +29,17 @@ public struct LoopbackAPI: Sendable {
     public let name: String
     public let jobs: ProResJobs
     public let pairing: Pairing
+    /// Called for every request with the right token: the bridge reached the app.
+    public let seen: (@Sendable () -> Void)?
 
-    public init(token: String, version: String, name: String, jobs: ProResJobs, pairing: Pairing) {
+    public init(token: String, version: String, name: String, jobs: ProResJobs, pairing: Pairing,
+                seen: (@Sendable () -> Void)? = nil) {
         self.token = token
         self.version = version
         self.name = name
         self.jobs = jobs
         self.pairing = pairing
+        self.seen = seen
     }
 
     /// Only the extension's own pages: Safari gives them this scheme.
@@ -66,6 +70,7 @@ public struct LoopbackAPI: Sendable {
         if !Self.sameToken(req.header("x-slipstream-token") ?? "", token) {
             response = Self.problem(JobError("bad-request", "Falsches Token."), status: 403)
         } else {
+            seen?()
             do {
                 response = try await route(req)
             } catch {

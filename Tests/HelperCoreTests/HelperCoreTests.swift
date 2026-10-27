@@ -115,6 +115,30 @@ final class TunnelTests: XCTestCase {
     }
 }
 
+final class CPUChoiceTests: XCTestCase {
+    func testQuarters() {
+        XCTAssertEqual(CPUChoice.options(cores: 12).map(\.threads), [12, 9, 6, 3])
+        XCTAssertEqual(CPUChoice.options(cores: 12).first?.label, "Alle (12)")
+        XCTAssertEqual(CPUChoice.options(cores: 8).map(\.threads), [8, 6, 4, 2])
+        XCTAssertEqual(CPUChoice.options(cores: 10).map(\.threads), [10, 8, 5, 3])
+    }
+
+    /// The guard fires: tiny Macs give no zero and no twice the same number.
+    func testSmall() {
+        XCTAssertEqual(CPUChoice.options(cores: 2).map(\.threads), [2, 1])
+        XCTAssertEqual(CPUChoice.options(cores: 1).map(\.threads), [1])
+        XCTAssertEqual(CPUChoice.options(cores: 0).map(\.threads), [1])
+    }
+
+    /// A number set in Settings that is no quarter still shows, ticked.
+    func testCurrentFromSettings() {
+        let o = CPUChoice.options(cores: 12, current: 7)
+        XCTAssertEqual(o.map(\.threads), [12, 9, 7, 6, 3])
+        XCTAssertEqual(o.first { $0.threads == 7 }?.label, "Eigene (7)")
+        XCTAssertEqual(CPUChoice.options(cores: 12, current: 99).count, 4)
+    }
+}
+
 final class WorkerProtocolTests: XCTestCase {
     func testEvents() {
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"connection","up":true,"refused":[{"kind":"rung","reason":"x265 4.0 statt 4.1"}]}"#),

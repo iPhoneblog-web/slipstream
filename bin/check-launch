@@ -1,0 +1,36 @@
+#!/bin/zsh
+# Starts the built app and checks that Settings opens: `-openSettings YES` takes the menu's own
+# path (AppModel.showSettings), and the app must then own a normal window on screen within 10 s.
+# Runs in CI after bin/package. It refuses to run beside another Slipstream: two apps would
+# share one app group file, the one the Safari extension reads.
+#   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
+set -euo pipefail
+cd "${0:A:h}/.."
+app=${1:-dist/Slipstream.app}
+if pgrep -x Slipstream >/dev/null; then
+  print "another Slipstream is running; not starting a second one" >&2
+  exit 1
+fi
+"$app/Contents/MacOS/Slipstream" -openSettings YES &
+pid=$!
+trap 'kill $pid 2>/dev/null || true' EXIT
+for i in {1..20}; do
+  sleep 0.5
+  # Layer 0 is a normal window; the menu bar item is another layer. Window titles need screen
+  # recording rights, the owner and the layer do not.
+  if swift - $pid <<'SWIFT'
+import CoreGraphics
+import Foundation
+let pid = Int(CommandLine.arguments[1])!
+let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+if let w = mine.first, let b = w[kCGWindowBounds as String] as? [String: Double] {
+    print("settings window on screen: \(Int(b["Width"] ?? 0))x\(Int(b["Height"] ?? 0))")
+    exit(0)
+}
+exit(1)
+SWIFT
+  then exit 0; fi
+done
+print "no settings window within 10 s" >&2
+exit 1

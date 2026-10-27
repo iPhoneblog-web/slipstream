@@ -13,16 +13,35 @@ struct SlipstreamApp: App {
             MenuIcon(model: delegate.model)
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView(model: delegate.model)
-        }
-
-        Window("Protokoll", id: "log") {
-            LogView(model: delegate.model)
-        }
-        .defaultSize(width: 720, height: 420)
     }
+}
+
+/// Settings and the log as windows AppKit owns. SwiftUI's `Settings` scene with `SettingsLink`
+/// did not open from the menu of a menu bar app (LSUIElement, no Dock icon, never active): the
+/// link asks the app to show its settings, and an app that is not active shows nothing. So the
+/// menu calls these, which make the window and activate the app first.
+@MainActor
+final class Windows {
+    private var open: [String: NSWindow] = [:]
+
+    func show<V: View>(_ id: String, title: String, size: NSSize, resizable: Bool = false, _ view: () -> V) {
+        let window = open[id] ?? {
+            let w = NSWindow(contentViewController: NSHostingController(rootView: view()))
+            w.title = title
+            w.identifier = NSUserInterfaceItemIdentifier(id)
+            w.styleMask = resizable ? [.titled, .closable, .resizable, .miniaturizable] : [.titled, .closable]
+            w.setContentSize(size)
+            w.isReleasedWhenClosed = false
+            w.center()
+            open[id] = w
+            return w
+        }()
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    func isVisible(_ id: String) -> Bool { open[id]?.isVisible == true }
 }
 
 @MainActor
@@ -33,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A write to a worker that just died must fail with EPIPE, not end the app.
         signal(SIGPIPE, SIG_IGN)
         model.start()
+        // bin/check-launch: `-openSettings YES` opens Settings the way the menu does, and the
+        // script checks that the window is on screen.
+        if UserDefaults.standard.bool(forKey: "openSettings") {
+            model.showSettings()
+        }
     }
 
     /// Quit while encoding asks first, and gives the job back (ADR-0007 §9).
@@ -79,7 +103,7 @@ struct MenuIcon: View {
 
 struct MenuContent: View {
     @ObservedObject var model: AppModel
-    @Environment(\.openWindow) private var openWindow
+    @AppStorage("threads") private var threads = AppModel.maxThreads
 
     var body: some View {
         Text(stateLine)
@@ -117,20 +141,32 @@ struct MenuContent: View {
                 Button("24 Stunden") { model.pause(for: 24 * 3600) }
             }
         }
-        Button("Protokoll anzeigen …") {
-            openWindow(id: "log")
-            NSApp.activate(ignoringOtherApps: true)
+        Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
+            Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
+                ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
+                    Text(c.label).tag(c.threads)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
         }
+        Button("Protokoll anzeigen …") { model.showLog() }
 
         Divider()
         Text(connectionLine)
+        if let seen = model.extensionSeen {
+            Text("Safari-Extension: verbunden, zuletzt \(seen.formatted(date: .omitted, time: .shortened))")
+        } else {
+            Text("Safari-Extension: noch nicht verbunden")
+            Text("Upload-Center in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, upload.iphoneblog.de)")
+        }
         ForEach(model.refused, id: \.kind) { r in
             Text("Keine \(r.kind)-Aufträge: \(r.reason)")
         }
 
         Divider()
         Button("Upload-Center öffnen") { NSWorkspace.shared.open(AppModel.uploadCenter) }
-        SettingsLink { Text("Einstellungen …") }
+        Button("Einstellungen …") { model.showSettings() }
         Button("Über Slipstream") { About.show(model) }
         if let latest = model.updateAvailable {
             Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }

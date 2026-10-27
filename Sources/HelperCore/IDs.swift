@@ -10,6 +10,9 @@ public enum SlipstreamIDs {
     /// Team-prefixed, so a Developer ID app needs no provisioning profile for it.
     public static let appGroup = "W9N692KH39.io.github.iphoneblog-web.slipstream"
     public static let loopbackFile = "loopback.json"
+    /// Touched by the app extension at every presence check and launch, so the app can tell
+    /// whether Safari's extension reaches it (the menu's "Safari-Extension" line).
+    public static let extensionSeenFile = "extension-seen"
     public static let logSubsystem = bundle
     /// The extension protocol's version (docs/extension-protocol.md).
     public static let protocolVersion = 1

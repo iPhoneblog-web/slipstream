@@ -41,6 +41,29 @@ final class AppModel: ObservableObject {
     @Published private(set) var tools: [WorkerEvent.Tool] = []
     @Published private(set) var updateAvailable: String?
     @Published private(set) var problem: String?
+    /// When Safari's extension last reached this app since it started: the app extension's
+    /// presence check, or a bridge request with the token. Nil: not since the start.
+    @Published private(set) var extensionSeen: Date?
+
+    private let startedAt = Date()
+    private let windows = Windows()
+
+    func showSettings() {
+        windows.show("settings", title: "Slipstream – Einstellungen", size: NSSize(width: 460, height: 380)) {
+            SettingsView(model: self)
+        }
+    }
+
+    func showLog() {
+        windows.show("log", title: "Slipstream – Protokoll", size: NSSize(width: 720, height: 420), resizable: true) {
+            LogView(model: self)
+        }
+    }
+
+    func markExtensionSeen(_ at: Date = Date()) {
+        guard at >= startedAt else { return }
+        if extensionSeen.map({ at > $0 }) ?? true { extensionSeen = at }
+    }
 
     static let uploadCenter = URL(string: "https://upload.iphoneblog.de/")!
     static let releases = URL(string: "https://github.com/iPhoneblog-web/slipstream/releases/latest")!
@@ -100,7 +123,7 @@ final class AppModel: ObservableObject {
         timers.append(Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in
             Task { await jobs.cleanUp() }
         })
-        timers.append(Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+        timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         })
         startWorker()
@@ -111,7 +134,8 @@ final class AppModel: ObservableObject {
         let pairing = AppPairing { [weak self] _ in
             await MainActor.run { self?.restartWorker() }
         }
-        let api = LoopbackAPI(token: token, version: version, name: AppPairing.macName, jobs: jobs, pairing: pairing)
+        let api = LoopbackAPI(token: token, version: version, name: AppPairing.macName, jobs: jobs, pairing: pairing,
+                              seen: { Task { @MainActor [weak self] in self?.markExtensionSeen() } })
         let server = LoopbackServer(api: api)
         let port = try await server.start()
         self.server = server
@@ -245,6 +269,10 @@ final class AppModel: ObservableObject {
     }
 
     private func tick() {
+        let marker = Paths.appGroup.appendingPathComponent(SlipstreamIDs.extensionSeenFile)
+        if let at = (try? FileManager.default.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date {
+            markExtensionSeen(at)
+        }
         if let until = pausedUntil, until <= Date() { setPause(nil, tellWorker: false) }
     }
 
