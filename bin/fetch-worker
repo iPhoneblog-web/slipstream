@@ -10,11 +10,11 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 repo=kyrios/encode-queue
-tag=v0.2.2
+tag=v0.2.4
 worker=encode-worker-darwin-arm64
-worker_sha256=d820bfbcdd0cd09a374d957c44b70d894016a16d4cf52b0bb5ff860b2544a0a5
+worker_sha256=089166e302b2b8918886df19199a250fed62231bb4cd9d7ebdf3593de515d2ae
 toolchain=encode-toolchain-darwin-arm64.tar.gz
-toolchain_sha256=ee98e4a86c1fe18c9acc02f1cb064d1cda869cce6fdeb2c02760351ba65125ae
+toolchain_sha256=de3c0c606150ba0fece51765ccd9bf2bb90fe4b666c1681ccc0611bd0d7dd396
 
 rm -rf build/worker build/tools build/fetch
 mkdir -p build/worker build/tools build/fetch
@@ -25,6 +25,8 @@ $toolchain_sha256  $toolchain" | shasum -a 256 -c
 
 mv $worker ../worker/encode-worker
 chmod +x ../worker/encode-worker
+# encode-worker's own licence (MIT), from the same tag, for the app's licences folder.
+gh api "repos/$repo/contents/LICENSE?ref=$tag" -H 'Accept: application/vnd.github.raw' > ../worker/LICENSE
 tar xzf $toolchain -C ../tools --strip-components 1
 cd ..
 rm -rf fetch
@@ -34,6 +36,9 @@ for f in worker/encode-worker tools/ffmpeg tools/ffprobe tools/whisper-cli; do
   file $f | grep -q 'Mach-O 64-bit executable arm64' || { print "$f is not a macOS arm64 binary" >&2; exit 1; }
 done
 [[ -f tools/versions.txt ]] || { print "missing in $tag: versions.txt" >&2; exit 1; }
+grep -q 'MIT License' worker/LICENSE || { print "encode-queue $tag: no MIT licence" >&2; exit 1; }
+# From toolchain 2 on the tarball carries each component's licence and SOURCES.md.
+[[ -s tools/licenses/SOURCES.md ]] && print "licences: $(ls tools/licenses | tr '\n' ' ')"
 print "embedding encode-queue $tag: $(worker/encode-worker --version)"
 cat tools/versions.txt
 tools/ffmpeg -hide_banner -version | head -1

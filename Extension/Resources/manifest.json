@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Slipstream",
   "version": "0.0.0",
-  "description": "Verbindet deine Funkhaus-Seite mit Slipstream auf diesem Mac: ProRes wird hier umgewandelt, bevor es hochlädt. Antwortet nur auf der Seite, die in Slipstream eingerichtet ist.",
+  "description": "Verbindet dein Funkhaus mit Slipstream auf diesem Mac: ProRes wird hier umgewandelt, bevor es hochlädt. Antwortet nur dem Funkhaus, das in Slipstream eingerichtet ist.",
   "icons": {
     "48": "icon-48.png",
     "96": "icon-96.png",

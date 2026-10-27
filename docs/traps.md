@@ -26,6 +26,9 @@ Things that cost time once, so they cost it only once. Each says what happens an
   Funkhaus got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
   Allow the Funkhaus site again in Safari → Einstellungen → Erweiterungen → Slipstream. The
   menu's line "Safari-Extension" says whether the extension reached the app since it started.
+- **A Safari that was running before an install or update keeps the old extension**: after
+  1.0.3 was deleted and 1.1.0 installed, the Funkhaus got no answer until Safari was quit with
+  ⌘Q (2026-10-27). The install steps and the setup window say so.
 - **A new bundle id is a new app** for macOS and Safari. 1.1.0 moved to
   `io.github.kyrios.slipstream`: the old app must be
   removed, the new extension turned on again, and the WireGuard key is new (the keychain item
@@ -67,6 +70,15 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
   (`LSUIElement`, so never the active app): "Einstellungen …" did nothing in 1.0.1. Settings and
   the log are windows AppKit owns (`Windows` in `SlipstreamApp.swift`), opened after
   `NSApp.activate`. `bin/check-launch` opens Settings through the same path in CI.
+- **A published value that changes every second closes an open submenu**: MenuBarExtra rebuilds
+  its menu on every change of what it reads, and in 1.1.0 the worker's `job` event (once a
+  second), presence answers and the extension's last contact did so; "Pause" and "CPU …" opened
+  and closed about once a second. The menu reads `MenuMirror` instead: finished text, changed
+  only when a line's text changes (times to the minute, fps and speed rounded), and held while a
+  menu is tracking.
+- **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
+  Settings has four tabs, each as tall as its content, in a resizable window with a minimum
+  size.
 
 ## Priority
 

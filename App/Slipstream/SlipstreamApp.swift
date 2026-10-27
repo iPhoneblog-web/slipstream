@@ -8,9 +8,9 @@ struct SlipstreamApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(model: delegate.model)
+            MenuContent(model: delegate.model, mirror: delegate.mirror)
         } label: {
-            MenuIcon(model: delegate.model)
+            MenuIcon(mirror: delegate.mirror)
         }
         .menuBarExtraStyle(.menu)
     }
@@ -24,13 +24,17 @@ struct SlipstreamApp: App {
 final class Windows {
     private var open: [String: NSWindow] = [:]
 
-    func show<V: View>(_ id: String, title: String, size: NSSize, resizable: Bool = false, _ view: () -> V) {
+    /// `size` nil: the window follows its content's size (the setup window grows with a message).
+    func show<V: View>(_ id: String, title: String, size: NSSize?, resizable: Bool = false, _ view: () -> V) {
         let window = open[id] ?? {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: view()))
+            let host = NSHostingController(rootView: view())
+            if size == nil { host.sizingOptions = [.preferredContentSize] }
+            let w = NSWindow(contentViewController: host)
             w.title = title
             w.identifier = NSUserInterfaceItemIdentifier(id)
             w.styleMask = resizable ? [.titled, .closable, .resizable, .miniaturizable] : [.titled, .closable]
-            w.setContentSize(size)
+            if let size { w.setContentSize(size) }
+            if resizable, let size { w.contentMinSize = NSSize(width: min(size.width, 440), height: min(size.height, 260)) }
             w.isReleasedWhenClosed = false
             w.center()
             open[id] = w
@@ -47,6 +51,8 @@ final class Windows {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    /// The menu's text, still while a menu is open (MenuMirror).
+    lazy var mirror = MenuMirror(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A write to a worker that just died must fail with EPIPE, not end the app.
@@ -83,143 +89,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// The state in the icon itself: idle, encoding with its share, paused, no connection.
 struct MenuIcon: View {
-    @ObservedObject var model: AppModel
+    @ObservedObject var mirror: MenuMirror
 
     var body: some View {
-        if model.pausedUntil != nil {
+        switch mirror.icon {
+        case .paused:
             Image(systemName: "pause.circle")
-        } else if let fraction = model.proresJob?.fraction ?? model.queueJob?.fraction {
+        case .progress(let percent):
             HStack(spacing: 2) {
                 Image(systemName: "wind")
-                Text("\(Int(fraction * 100)) %").monospacedDigit()
+                Text("\(percent) %").monospacedDigit()
             }
-        } else if model.connection == .down {
+        case .down:
             Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
-        } else {
+        case .idle:
             Image(systemName: "wind")
         }
     }
 }
 
+/// The menu: text from the mirror, which stands still while the menu is open; actions on the
+/// model.
 struct MenuContent: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
+    @ObservedObject var mirror: MenuMirror
     @AppStorage("threads") private var threads = AppModel.maxThreads
 
     var body: some View {
-        if model.site == nil {
+        let l = mirror.lines
+        if !l.configured {
             Text("Nicht eingerichtet")
             Button("Einrichten …") { model.showSetup() }
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            configured
-        }
-    }
-
-    @ViewBuilder private var configured: some View {
-        Text(stateLine)
-        if let problem = model.problem {
-            Text(problem)
-        }
-
-        if let job = model.proresJob {
-            Divider()
-            Text("ProRes: \(job.name)")
-            Text(Self.progressLine(fraction: job.fraction, fps: job.fps, speed: job.speed, eta: job.etaS))
-        }
-        if let job = model.queueJob {
-            Divider()
-            Text([job.title, job.kind == "whisper" ? "Whisper" : job.rung.map { "\($0)p" }].compactMap { $0 }.joined(separator: " · "))
-            Text(Self.progressLine(fraction: job.fraction ?? 0, fps: job.fps, speed: job.speed, eta: job.etaS))
-        }
-
-        Divider()
-        if model.results.isEmpty {
-            Text("Noch keine Aufträge")
-        }
-        ForEach(model.results) { r in
-            Text("\(r.title): \(Self.verdict(r.verdict))\(r.check.map { " (\($0))" } ?? "")")
-        }
-        Text("Heute fertig: \(model.finishedToday)")
-
-        Divider()
-        if let until = model.pausedUntil {
-            Button("Fortsetzen (Pause bis \(until.formatted(date: .omitted, time: .shortened)))") { model.resume() }
-        } else {
-            Menu("Pause") {
-                Button("30 Minuten") { model.pause(for: 30 * 60) }
-                Button("2 Stunden") { model.pause(for: 2 * 3600) }
-                Button("24 Stunden") { model.pause(for: 24 * 3600) }
+            Text(l.state)
+            if let problem = l.problem { Text(problem) }
+            if !l.job.isEmpty {
+                Divider()
+                ForEach(l.job, id: \.self) { Text($0) }
             }
-        }
-        Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
-            Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
-                ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
-                    Text(c.label).tag(c.threads)
+
+            Divider()
+            ForEach(l.results, id: \.self) { Text($0) }
+            Text(l.today)
+
+            Divider()
+            if let until = l.pausedUntil {
+                Button("Fortsetzen (Pause bis \(until))") { model.resume() }
+            } else {
+                Menu("Pause") {
+                    Button("30 Minuten") { model.pause(for: 30 * 60) }
+                    Button("2 Stunden") { model.pause(for: 2 * 3600) }
+                    Button("24 Stunden") { model.pause(for: 24 * 3600) }
                 }
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        }
-        Button("Protokoll anzeigen …") { model.showLog() }
+            Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
+                Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
+                    ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
+                        Text(c.label).tag(c.threads)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
+            Button("Protokoll anzeigen …") { model.showLog() }
 
-        Divider()
-        Text(connectionLine)
-        if let seen = model.extensionSeen {
-            Text("Safari-Extension: verbunden, zuletzt \(seen.formatted(date: .omitted, time: .shortened))")
-        } else {
-            Text("Safari-Extension: noch nicht verbunden")
-            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, \(model.site?.host ?? ""))")
-        }
-        ForEach(model.refused, id: \.kind) { r in
-            Text("Keine \(r.kind)-Aufträge: \(r.reason)")
-        }
+            Divider()
+            Text(l.connection)
+            ForEach(l.extensionLines, id: \.self) { Text($0) }
+            ForEach(l.refused, id: \.self) { Text($0) }
 
-        Divider()
-        Button("Funkhaus öffnen") { model.openSite() }
-        Button("Einstellungen …") { model.showSettings() }
-        Button("Über Slipstream") { About.show(model) }
-        if let latest = model.updateAvailable {
-            Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+            Divider()
+            Button("Funkhaus öffnen") { model.openSite() }
+            Button("Einstellungen …") { model.showSettings() }
+            Button("Über Slipstream") { About.show(model) }
+            Button("Lizenzen …") { About.showLicences() }
+            if let latest = l.update {
+                Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+            }
+            Divider()
+            Button("Beenden") { NSApp.terminate(nil) }
         }
-        Divider()
-        Button("Beenden") { NSApp.terminate(nil) }
-    }
-
-    private var stateLine: String {
-        if model.pausedUntil != nil { return "Pausiert" }
-        if model.proresJob != nil || model.queueJob != nil { return "Wandelt um" }
-        switch model.connection {
-        case .up: return "Bereit"
-        case .down: return "Keine Verbindung zum Encoder"
-        case .notPaired, .noWorker: return "Bereit für ProRes"
-        }
-    }
-
-    private var connectionLine: String {
-        switch model.connection {
-        case .notPaired: return "Nicht gekoppelt (nur ProRes)"
-        case .noWorker: return "Ohne Worker (nur ProRes)"
-        case .down: return "Tunnel getrennt" + (model.lastAnswer.map { ", letzte Antwort \($0.formatted(date: .omitted, time: .shortened))" } ?? "")
-        case .up: return "Tunnel verbunden" + (model.lastAnswer.map { ", letzte Antwort \($0.formatted(date: .omitted, time: .shortened))" } ?? "")
-        }
-    }
-
-    static func verdict(_ v: String) -> String {
-        switch v {
-        case "accepted": return "angenommen"
-        case "rejected": return "abgelehnt"
-        case "given_back": return "zurückgegeben"
-        default: return v
-        }
-    }
-
-    static func progressLine(fraction: Double, fps: Double?, speed: Double?, eta: Int?) -> String {
-        var parts = ["\(Int(fraction * 100)) %"]
-        if let fps { parts.append(String(format: "%.1f fps", fps)) }
-        if let speed { parts.append(String(format: "%.2f×", speed)) }
-        if let eta { parts.append("noch \(Duration.seconds(eta).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2)))") }
-        return parts.joined(separator: " · ")
     }
 }
 
@@ -242,6 +193,19 @@ enum About {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
+    /// The licences folder in Finder: Slipstream's and encode-worker's (MIT), and the
+    /// toolchain's, with SOURCES.md, which says where the source of ffmpeg (GPLv3) is.
+    @MainActor
+    static func showLicences() {
+        guard let url = Bundle.main.url(forResource: "licenses", withExtension: nil) else { return }
+        let sources = url.appendingPathComponent("SOURCES.md")
+        if FileManager.default.fileExists(atPath: sources.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([sources])
+        } else {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     /// `Contents/Resources/versions.txt`, from the toolchain of encode-queue (bin/fetch-worker).
     static func bundledTools() -> [String] {
         guard let text = Paths.toolVersions else {
@@ -251,16 +215,30 @@ enum About {
     }
 }
 
+/// Settings: four tabs, each as tall as its content, in a window that can be resized (it fit no
+/// 13-inch screen as one long form in 1.1.0).
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @AppStorage("threads") private var threads = AppModel.maxThreads
     @AppStorage("gpu") private var gpu = true
     @AppStorage("jobs") private var jobs = 1
     @State private var identity: PairingIdentity?
+    /// The real state: the user can turn it off in System Settings → Allgemein → Anmeldeobjekte.
+    @State private var loginItem = LoginItem.isOn
 
     var body: some View {
-        Form {
-            Section("Leistung") {
+        TabView {
+            Form {
+                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
+                Text("Ausschalten geht auch in den Systemeinstellungen → Allgemein → Anmeldeobjekte.")
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Version", value: model.version)
+                Button("Lizenzen …") { About.showLicences() }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Allgemein", systemImage: "gearshape") }
+
+            Form {
                 Stepper("CPU-Threads: \(threads) von \(AppModel.maxThreads)", value: $threads, in: 1...AppModel.maxThreads)
                 Toggle("Whisper darf die GPU nutzen", isOn: $gpu)
                 Picker("Aufträge gleichzeitig", selection: $jobs) {
@@ -270,11 +248,17 @@ struct SettingsView: View {
                 Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Funkhaus") {
-                LabeledContent("Seite", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
-                Button("Andere Seite einrichten …") { model.showSetup() }
+            .formStyle(.grouped)
+            .tabItem { Label("Leistung", systemImage: "cpu") }
+
+            Form {
+                LabeledContent("Funkhaus", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
+                Button("Anderes Funkhaus einrichten …") { model.showSetup() }
             }
-            Section("Kopplung") {
+            .formStyle(.grouped)
+            .tabItem { Label("Funkhaus", systemImage: "antenna.radiowaves.left.and.right") }
+
+            Form {
                 if let identity {
                     LabeledContent("Name", value: identity.name)
                     LabeledContent("Öffentlicher Schlüssel") {
@@ -285,36 +269,47 @@ struct SettingsView: View {
                 Text("Koppeln: im Funkhaus auf der Seite Encoder „Diesen Mac als Helper hinzufügen“, in Safari auf diesem Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            .formStyle(.grouped)
+            .tabItem { Label("Kopplung", systemImage: "link") }
         }
-        .formStyle(.grouped)
-        .frame(width: 460)
+        .padding(.top, 4)
+        .frame(minWidth: 440, idealWidth: 500, maxWidth: .infinity, minHeight: 260, idealHeight: 300, maxHeight: .infinity)
         .onChange(of: threads) { model.limitsChanged() }
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
         .task { identity = try? await AppPairing { _ in }.identity() }
+        .onAppear { loginItem = LoginItem.isOn }
     }
 }
 
-/// First launch, and "Andere Seite einrichten": the Funkhaus site, checked before it is kept.
+/// First launch, and "Anderes Funkhaus einrichten": the Funkhaus, checked before it is kept.
 struct SetupView: View {
     @ObservedObject var model: AppModel
     @State private var host = ""
     @State private var problem: String?
     @State private var busy = false
+    @State private var atLogin = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Für welche Funkhaus-Seite arbeitet dieser Mac?").font(.headline)
-            Text("Slipstream und seine Safari-Extension antworten nur dieser Seite.")
+            Text("Für welches Funkhaus arbeitet dieser Mac?").font(.headline)
+            Text("Slipstream und seine Safari-Extension antworten nur diesem Funkhaus.")
                 .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             TextField("funkhaus.example.org", text: $host)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { check() }
+            Toggle("Bei der Anmeldung starten", isOn: $atLogin)
             if let problem {
                 Text(problem).font(.callout).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             } else if let site = model.site {
                 Text("Eingerichtet: \(site.name) (\(site.host))").font(.callout)
             }
+            Text("Nach dem Installieren oder einem Update: Safari mit ⌘Q beenden und neu öffnen, sonst sieht Safari die Extension nicht.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 if busy { ProgressView().controlSize(.small) }
@@ -325,7 +320,11 @@ struct SetupView: View {
         }
         .padding(20)
         .frame(width: 480)
-        .onAppear { host = model.site?.host ?? "" }
+        .onAppear {
+            host = model.site?.host ?? ""
+            // A first setup starts at login by default; setting up another Funkhaus shows how it is.
+            if model.site != nil { atLogin = LoginItem.isOn }
+        }
     }
 
     private func check() {
@@ -334,7 +333,10 @@ struct SetupView: View {
         Task {
             problem = await model.checkSite(host)
             busy = false
-            if problem == nil { NSApp.keyWindow?.close() }
+            if problem == nil {
+                LoginItem.set(atLogin)
+                NSApp.keyWindow?.close()
+            }
         }
     }
 }

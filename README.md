@@ -39,20 +39,30 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    host, such as `funkhaus.example.org`, and choose **Prüfen und speichern**. Slipstream fetches
    `https://<host>/.well-known/funkhaus.json` and keeps the site only if it answers as a
    Funkhaus speaking a protocol this version knows. Until then the menu offers only
-   **Einrichten …**. Settings can change the site later.
-3. **Turn the extension on.** Safari → Settings → Extensions → tick **Slipstream**. Safari says
+   **Einrichten …**. Settings can change the site later. **Bei der Anmeldung starten**, on by
+   default, makes Slipstream a login item; Settings and System Settings → General → Login Items
+   can turn it off.
+3. **Quit Safari with ⌘Q and open it again**, after installing and after every update: a Safari
+   that was running before keeps the old extension, and the Funkhaus then gets no answer.
+4. **Turn the extension on.** Safari → Settings → Extensions → tick **Slipstream**. Safari says
    the extension can read and change pages on **all websites** ("alle Websites"): it is matched to
    every https page because the site is your choice, not the manifest's, but it answers only the
    site set up in step 2. Safari still asks per site: on the Funkhaus's first visit choose
    **Always allow on this website**.
-4. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu now says
+5. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu now says
    "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
    "Diesen Mac als Helper hinzufügen".
-5. **Optional:** System Settings → General → Login Items → add Slipstream, so it starts with
-   every login.
 
-An update: when the menu says "Update verfügbar", download the new DMG and replace the app. The
-site, the extension and the pairing stay.
+An update: when the menu says "Update verfügbar", download the new DMG, replace the app, and
+quit Safari with ⌘Q and open it again. The site, the extension and the pairing stay.
+
+## Licences
+
+Slipstream's own code is MIT: [LICENSE](LICENSE). It embeds programs under their own licences:
+encode-worker (MIT) and encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
+(with x264 and x265, GPLv2 or later; LAME, LGPL; libvmaf, BSD-2-Clause-Patent) and whisper-cli is
+MIT. Every licence is in the app (menu: "Lizenzen …"); the source of the toolchain is attached to
+encode-queue's `toolchain-<N>` release ([docs/tools.md](docs/tools.md), "Licences").
 
 ## The code
 

@@ -15,7 +15,7 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
 const plain = (o) => (o === undefined ? o : JSON.parse(JSON.stringify(o)));
 
 // A window: its listeners, what was posted on it, the frames put into its document.
-function page(origin) {
+function page(origin, { frameLoads = true } = {}) {
   const listeners = [];
   const posted = [];
   const frames = [];
@@ -25,8 +25,10 @@ function page(origin) {
     postMessage: (data, target, ports) => posted.push({ data, target, ports }),
   };
   const document = {
-    body: { appendChild: (f) => { frames.push(f); setTimeout(() => f.onload && f.onload(), 0); } },
+    body: { appendChild: (f) => { frames.push(f); if (frameLoads) setTimeout(() => f.onload && f.onload(), 0); } },
     documentElement: null,
+    readyState: "complete",
+    addEventListener() {},
     createElement: () => {
       const f = { style: {}, setAttribute() {}, contentWindow: { postMessage() {} } };
       f.addEventListener = (t, fn) => { if (t === "load") f.onload = fn; };
@@ -40,8 +42,8 @@ function page(origin) {
 
 class FakeChannel { constructor() { this.port1 = { side: 1 }; this.port2 = { side: 2 }; } }
 
-function runContent(origin, background) {
-  const p = page(origin);
+function runContent(origin, background, options) {
+  const p = page(origin, options);
   const browser = {
     runtime: {
       getManifest: () => ({ version: "1.1.0" }),
@@ -116,12 +118,31 @@ test("content script: answers the configured site, with a port", async () => {
   const p = runContent(SITE, bg);
   await p.send({ slipstream: 1, type: "hello", id: "h1" });
   await tick();
-  assert.equal(p.posted.length, 1);
-  assert.equal(p.posted[0].data.re, "h1");
-  assert.equal(p.posted[0].data.helper.present, true);
-  assert.equal(p.posted[0].target, SITE);
-  assert.equal(p.posted[0].ports.length, 1);
+  const hello = p.posted.filter((m) => m.data.type === "hello");
+  assert.equal(hello.length, 1);
+  assert.equal(hello[0].data.re, "h1");
+  assert.equal(hello[0].data.helper.present, true);
+  assert.equal(hello[0].target, SITE);
+  assert.equal(hello[0].ports.length, 1);
   assert.equal(p.frames.length, 1);
+});
+
+test("content script: on the site it says ready, unasked, so a late page says hello again", async () => {
+  const p = runContent(SITE, runBackground());
+  await tick();
+  const ready = p.posted.filter((m) => m.data.type === "ready");
+  assert.ok(ready.length >= 1);
+  assert.equal(ready[0].target, SITE);
+  assert.equal(ready[0].data.protocol, 1);
+});
+
+test("content script: the answer does not wait for the bridge frame", async () => {
+  const p = runContent(SITE, runBackground(), { frameLoads: false });
+  await p.send({ slipstream: 1, type: "hello", id: "h1" });
+  await tick();
+  const hello = p.posted.filter((m) => m.data.type === "hello");
+  assert.equal(hello.length, 1);
+  assert.equal(hello[0].ports.length, 1);
 });
 
 function runBridge(loopbackAnswer) {

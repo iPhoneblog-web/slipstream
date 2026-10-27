@@ -2,7 +2,7 @@
 
 Slipstream wandelt ProRes-Dateien, die du ins Funkhaus ziehst, auf deinem Mac um, bevor
 sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
-Installieren und die Funkhaus-Seite einrichten: [README, „Install“](../README.md#install).
+Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#install).
 
 ## ProRes hochladen
 
@@ -33,21 +33,30 @@ Installieren und die Funkhaus-Seite einrichten: [README, „Install“](../READM
   einem Mac, der nur ProRes umwandelt.
 - **Safari-Extension:** „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
   Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
-  Einstellungen → Erweiterungen → Slipstream die eingerichtete Funkhaus-Seite erlauben (nach
+  Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
   einem Update von Slipstream fragt Safari das neu).
-- **Einstellungen …:** CPU-Threads, ob Whisper die GPU nutzen darf, Aufträge gleichzeitig, der
-  Stand der Kopplung.
+- **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
+  (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, ob Whisper die GPU
+  nutzen darf, Aufträge gleichzeitig), **Funkhaus** (welches, und ein anderes einrichten),
+  **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
+- **Bei der Anmeldung starten** (beim Einrichten an, in den Einstellungen umschaltbar):
+  Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
+  Anmeldeobjekte; dort ausgeschaltet, zeigen es die Einstellungen auch aus.
+- **Lizenzen …** zeigt die Lizenzen von Slipstream und von allem, was es mitbringt.
 
 Slipstream rechnet mit niedriger Priorität: was du am Mac tust, geht vor. Der Mac schläft nicht
 ein, solange Slipstream einen Auftrag hat.
 
 ## Wenn etwas schiefgeht
 
+- **Das Funkhaus findet Slipstream nicht, obwohl App und Extension laufen:** Safari mit ⌘Q
+  beenden und neu öffnen. Ein Safari, das schon vor dem Installieren oder Update lief, kennt die
+  neue Extension nicht.
 - **Das Funkhaus zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
   Ein Klick darauf startet sie im Hintergrund.
 - **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert, die
-  Extension ist aus, oder sie darf auf der Funkhaus-Seite nicht laufen (Safari →
+  Extension ist aus, oder sie darf beim Funkhaus nicht laufen (Safari →
   Einstellungen → Erweiterungen → Slipstream; das Menü zeigt dann „Safari-Extension: noch nicht
   verbunden“). Danach die Seite neu laden.
 - **„Das ist keine Videodatei.“** oder **„Dieses Videoformat (…) kann der Mac nicht lesen.“**:

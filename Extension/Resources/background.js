@@ -68,6 +68,10 @@ async function answer(msg, sender) {
   return null;
 }
 
+// Ask for the site as soon as the background starts, so a page's first question does not wait
+// for the app extension to start as well.
+site();
+
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return;
   answer(msg, sender).then(sendResponse, () => sendResponse(null));
