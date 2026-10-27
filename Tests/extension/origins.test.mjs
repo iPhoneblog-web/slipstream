@@ -1,6 +1,6 @@
 // The extension's origin checks (docs/traps.md, "Origins"), on the real scripts in a Node vm
 // with stand-ins for Safari's `browser`, the window and the document:
-//   node --test Tests/extension
+//   node --test Tests/extension/*.test.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
