@@ -29,7 +29,11 @@ build=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 identity=${SIGN_IDENTITY:--}
 
 xcodegen generate --quiet
+# The system git and no keychain for packages: Xcode's own would ask the login keychain for
+# github.com at every resolve, a prompt per build that blocks it (docs/traps.md, "Keychain
+# prompts from xcodebuild"). Sparkle is public and needs no credentials.
 xcodebuild -project Slipstream.xcodeproj -scheme Slipstream -configuration Release -derivedDataPath build/dd \
+  -scmProvider system -packageAuthorizationProvider netrc \
   MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build" -quiet build
 swift build -c release --arch arm64 --product slipstream-cli
 cli_dir=$(swift build -c release --arch arm64 --show-bin-path)
