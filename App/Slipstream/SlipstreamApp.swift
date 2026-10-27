@@ -8,9 +8,9 @@ struct SlipstreamApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(model: delegate.model)
+            MenuContent(model: delegate.model, mirror: delegate.mirror)
         } label: {
-            MenuIcon(model: delegate.model)
+            MenuIcon(mirror: delegate.mirror)
         }
         .menuBarExtraStyle(.menu)
     }
@@ -51,6 +51,8 @@ final class Windows {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    /// The menu's text, still while a menu is open (MenuMirror).
+    lazy var mirror = MenuMirror(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A write to a worker that just died must fail with EPIPE, not end the app.
@@ -87,144 +89,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// The state in the icon itself: idle, encoding with its share, paused, no connection.
 struct MenuIcon: View {
-    @ObservedObject var model: AppModel
+    @ObservedObject var mirror: MenuMirror
 
     var body: some View {
-        if model.pausedUntil != nil {
+        switch mirror.icon {
+        case .paused:
             Image(systemName: "pause.circle")
-        } else if let fraction = model.proresJob?.fraction ?? model.queueJob?.fraction {
+        case .progress(let percent):
             HStack(spacing: 2) {
                 Image(systemName: "wind")
-                Text("\(Int(fraction * 100)) %").monospacedDigit()
+                Text("\(percent) %").monospacedDigit()
             }
-        } else if model.connection == .down {
+        case .down:
             Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
-        } else {
+        case .idle:
             Image(systemName: "wind")
         }
     }
 }
 
+/// The menu: text from the mirror, which stands still while the menu is open; actions on the
+/// model.
 struct MenuContent: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
+    @ObservedObject var mirror: MenuMirror
     @AppStorage("threads") private var threads = AppModel.maxThreads
 
     var body: some View {
-        if model.site == nil {
+        let l = mirror.lines
+        if !l.configured {
             Text("Nicht eingerichtet")
             Button("Einrichten …") { model.showSetup() }
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            configured
-        }
-    }
-
-    @ViewBuilder private var configured: some View {
-        Text(stateLine)
-        if let problem = model.problem {
-            Text(problem)
-        }
-
-        if let job = model.proresJob {
-            Divider()
-            Text("ProRes: \(job.name)")
-            Text(Self.progressLine(fraction: job.fraction, fps: job.fps, speed: job.speed, eta: job.etaS))
-        }
-        if let job = model.queueJob {
-            Divider()
-            Text([job.title, job.kind == "whisper" ? "Whisper" : job.rung.map { "\($0)p" }].compactMap { $0 }.joined(separator: " · "))
-            Text(Self.progressLine(fraction: job.fraction ?? 0, fps: job.fps, speed: job.speed, eta: job.etaS))
-        }
-
-        Divider()
-        if model.results.isEmpty {
-            Text("Noch keine Aufträge")
-        }
-        ForEach(model.results) { r in
-            Text("\(r.title): \(Self.verdict(r.verdict))\(r.check.map { " (\($0))" } ?? "")")
-        }
-        Text("Heute fertig: \(model.finishedToday)")
-
-        Divider()
-        if let until = model.pausedUntil {
-            Button("Fortsetzen (Pause bis \(until.formatted(date: .omitted, time: .shortened)))") { model.resume() }
-        } else {
-            Menu("Pause") {
-                Button("30 Minuten") { model.pause(for: 30 * 60) }
-                Button("2 Stunden") { model.pause(for: 2 * 3600) }
-                Button("24 Stunden") { model.pause(for: 24 * 3600) }
+            Text(l.state)
+            if let problem = l.problem { Text(problem) }
+            if !l.job.isEmpty {
+                Divider()
+                ForEach(l.job, id: \.self) { Text($0) }
             }
-        }
-        Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
-            Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
-                ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
-                    Text(c.label).tag(c.threads)
+
+            Divider()
+            ForEach(l.results, id: \.self) { Text($0) }
+            Text(l.today)
+
+            Divider()
+            if let until = l.pausedUntil {
+                Button("Fortsetzen (Pause bis \(until))") { model.resume() }
+            } else {
+                Menu("Pause") {
+                    Button("30 Minuten") { model.pause(for: 30 * 60) }
+                    Button("2 Stunden") { model.pause(for: 2 * 3600) }
+                    Button("24 Stunden") { model.pause(for: 24 * 3600) }
                 }
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        }
-        Button("Protokoll anzeigen …") { model.showLog() }
+            Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
+                Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
+                    ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
+                        Text(c.label).tag(c.threads)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
+            Button("Protokoll anzeigen …") { model.showLog() }
 
-        Divider()
-        Text(connectionLine)
-        if let seen = model.extensionSeen {
-            Text("Safari-Extension: verbunden, zuletzt \(seen.formatted(date: .omitted, time: .shortened))")
-        } else {
-            Text("Safari-Extension: noch nicht verbunden")
-            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, \(model.site?.host ?? ""))")
-        }
-        ForEach(model.refused, id: \.kind) { r in
-            Text("Keine \(r.kind)-Aufträge: \(r.reason)")
-        }
+            Divider()
+            Text(l.connection)
+            ForEach(l.extensionLines, id: \.self) { Text($0) }
+            ForEach(l.refused, id: \.self) { Text($0) }
 
-        Divider()
-        Button("Funkhaus öffnen") { model.openSite() }
-        Button("Einstellungen …") { model.showSettings() }
-        Button("Über Slipstream") { About.show(model) }
-        Button("Lizenzen …") { About.showLicences() }
-        if let latest = model.updateAvailable {
-            Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+            Divider()
+            Button("Funkhaus öffnen") { model.openSite() }
+            Button("Einstellungen …") { model.showSettings() }
+            Button("Über Slipstream") { About.show(model) }
+            Button("Lizenzen …") { About.showLicences() }
+            if let latest = l.update {
+                Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+            }
+            Divider()
+            Button("Beenden") { NSApp.terminate(nil) }
         }
-        Divider()
-        Button("Beenden") { NSApp.terminate(nil) }
-    }
-
-    private var stateLine: String {
-        if model.pausedUntil != nil { return "Pausiert" }
-        if model.proresJob != nil || model.queueJob != nil { return "Wandelt um" }
-        switch model.connection {
-        case .up: return "Bereit"
-        case .down: return "Keine Verbindung zum Encoder"
-        case .notPaired, .noWorker: return "Bereit für ProRes"
-        }
-    }
-
-    private var connectionLine: String {
-        switch model.connection {
-        case .notPaired: return "Nicht gekoppelt (nur ProRes)"
-        case .noWorker: return "Ohne Worker (nur ProRes)"
-        case .down: return "Tunnel getrennt" + (model.lastAnswer.map { ", letzte Antwort \($0.formatted(date: .omitted, time: .shortened))" } ?? "")
-        case .up: return "Tunnel verbunden" + (model.lastAnswer.map { ", letzte Antwort \($0.formatted(date: .omitted, time: .shortened))" } ?? "")
-        }
-    }
-
-    static func verdict(_ v: String) -> String {
-        switch v {
-        case "accepted": return "angenommen"
-        case "rejected": return "abgelehnt"
-        case "given_back": return "zurückgegeben"
-        default: return v
-        }
-    }
-
-    static func progressLine(fraction: Double, fps: Double?, speed: Double?, eta: Int?) -> String {
-        var parts = ["\(Int(fraction * 100)) %"]
-        if let fps { parts.append(String(format: "%.1f fps", fps)) }
-        if let speed { parts.append(String(format: "%.2f×", speed)) }
-        if let eta { parts.append("noch \(Duration.seconds(eta).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2)))") }
-        return parts.joined(separator: " · ")
     }
 }
 
