@@ -60,7 +60,8 @@ final class LoopbackTests: XCTestCase {
     }
 
     private func waitFor(_ api: LoopbackAPI, _ id: String, phase: String) async throws -> [String: Any] {
-        for _ in 0..<200 {
+        // Up to 30 s: a real VideoToolbox encode on a busy Mac or CI runner takes seconds.
+        for _ in 0..<1500 {
             let j = json(await call(api, "GET", "/v1/jobs/\(id)"))
             if j["phase"] as? String == phase { return j }
             try await Task.sleep(nanoseconds: 20_000_000)

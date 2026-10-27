@@ -50,11 +50,11 @@ The content script answers on the same window, with the same `id` in `re`:
 - A page may say `hello` again at any time (after the user starts Slipstream, say). Each answer
   with `present: true` carries a new port; the page drops the old one.
 
-**`ready`, unasked (since 1.1.1).** On the configured site the content script also posts, at
+**`ready`, unasked (since 1.2.0).** On the configured site the content script also posts, at
 `document_start`, again at `DOMContentLoaded` and at `load`:
 
 ```js
-{ slipstream: 1, type: "ready", extension: "1.1.1", protocol: 1 }
+{ slipstream: 1, type: "ready", extension: "1.2.0", protocol: 1 }
 ```
 
 It carries no port and needs no answer. It tells a page that its hello may now be answered.
