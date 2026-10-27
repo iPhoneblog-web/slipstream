@@ -1,9 +1,11 @@
 #!/bin/zsh
 # Starts the built app and checks that Settings opens: `-openSettings YES` takes the menu's own
 # path (AppModel.showSettings), and the app must then own a normal window on screen within 10 s.
-# Then it hands the app a connect link (slipstream://connect?site=…, docs/funkhaus-api.md): the
-# setup window must open beside Settings, and no site may be saved, since only the user's
-# "Verbinden" saves one. Runs in CI after bin/package. It refuses to run beside another
+# With `-cycleSettingsTabs YES` Settings shows each tab once. Then it hands the app a connect
+# link (slipstream://connect?site=…, docs/funkhaus-api.md): the setup window must open beside
+# Settings, and no site may be saved, since only the user's "Verbinden" saves one. From the
+# moment Settings is on screen, the app's watchdog must log no "main thread blocked" (100 ms or
+# more; docs/traps.md, "A frozen Settings window"). Runs in CI after bin/package. It refuses to run beside another
 # Slipstream: two apps would share one app group file, the one the Safari extension reads.
 #   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
 set -euo pipefail
@@ -16,7 +18,7 @@ fi
 site=~/Library/Group\ Containers/W9N692KH39.io.github.kyrios.slipstream/site.json
 had_site=0
 [[ -f $site ]] && had_site=1
-"$app/Contents/MacOS/Slipstream" -openSettings YES &
+"$app/Contents/MacOS/Slipstream" -openSettings YES -cycleSettingsTabs YES &
 pid=$!
 trap 'kill $pid 2>/dev/null || true' EXIT
 
@@ -49,18 +51,23 @@ first=1
 (( had_site )) || first=2
 windows $first || { print "no settings window within 10 s" >&2; exit 1; }
 print "settings: ok"
+watch_from=$(date '+%Y-%m-%d %H:%M:%S')
+logged() {  # waits up to 10 s for a line of the app's log since $1 that contains $2
+  for i in {1..20}; do
+    sleep 0.5
+    /usr/bin/log show --start "$1" --predicate "subsystem == \"io.github.kyrios.slipstream\" AND eventMessage CONTAINS \"$2\"" \
+      --style compact 2>/dev/null | grep -q -- "$2" && return 0
+  done
+  return 1
+}
+logged "$watch_from" "settings tabs cycled" || { print "Settings did not go through its tabs within 10 s" >&2; exit 1; }
+print "settings tabs: ok"
 
 # example.org's hosts serve no Funkhaus, so the check fails; the window shows it, nothing saves.
 # The app logs the link it took (AppModel.open), and the setup window is on screen beside Settings.
 since=$(date '+%Y-%m-%d %H:%M:%S')
 open -a "$PWD/$app" 'slipstream://connect?site=funkhaus.example.org'
-took=0
-for i in {1..20}; do
-  sleep 0.5
-  if /usr/bin/log show --start "$since" --predicate 'subsystem == "io.github.kyrios.slipstream" AND eventMessage CONTAINS "connect link: funkhaus.example.org"' \
-       --style compact 2>/dev/null | grep -q 'connect link: funkhaus.example.org'; then took=1; break; fi
-done
-(( took )) || { print "the app did not take the connect link within 10 s" >&2; exit 1; }
+logged "$since" "connect link: funkhaus.example.org" || { print "the app did not take the connect link within 10 s" >&2; exit 1; }
 windows 2 || { print "no setup window beside Settings after the connect link" >&2; exit 1; }
 sleep 3
 if (( ! had_site )) && [[ -f $site ]]; then
@@ -68,3 +75,11 @@ if (( ! had_site )) && [[ -f $site ]]; then
   exit 1
 fi
 print "connect link: ok"
+
+blocked=$(/usr/bin/log show --start "$watch_from" --predicate 'subsystem == "io.github.kyrios.slipstream" AND eventMessage CONTAINS "main thread blocked"' \
+  --style compact 2>/dev/null | grep -- 'main thread blocked' || true)
+if [[ -n $blocked ]]; then
+  print "the main thread waited while Settings and the link ran:\n$blocked" >&2
+  exit 1
+fi
+print "main thread: never blocked for 100 ms or more"

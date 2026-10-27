@@ -158,6 +158,26 @@ final class AppModel: ObservableObject {
         if let url = site?.url { NSWorkspace.shared.open(url) } else { showSetup() }
     }
 
+    /// "Slipstream bei der Anmeldung starten?" once: at the first launch, and once for an install
+    /// from before 1.3.1 that never answered. A login item that is already on counts as yes.
+    /// Closing the window without an answer asks again at the next launch.
+    func askLoginItemOnce() {
+        guard !defaults.bool(forKey: "loginItemAsked") else { return }
+        Task {
+            if await LoginItem.isOn() {
+                defaults.set(true, forKey: "loginItemAsked")
+                return
+            }
+            windows.show("login", title: "Slipstream", size: nil) { LoginQuestion(model: self) }
+        }
+    }
+
+    func answerLoginItem(_ yes: Bool) {
+        defaults.set(true, forKey: "loginItemAsked")
+        log.notice("login item: \(yes ? "yes" : "no", privacy: .public)")
+        Task { await LoginItem.set(yes) }
+    }
+
     func showSettings() {
         windows.show("settings", title: "Slipstream – Einstellungen", size: NSSize(width: 500, height: 300), resizable: true) {
             SettingsView(model: self)
@@ -208,6 +228,7 @@ final class AppModel: ObservableObject {
         setSite(SiteConfig.load(from: Paths.appGroup))
         // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).
         if site == nil { showSetup() }
+        askLoginItemOnce()
         pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
         if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
             finishedToday = defaults.integer(forKey: "todayCount")

@@ -39,9 +39,9 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    host, such as `funkhaus.example.org`, and choose **Prüfen und speichern**. Slipstream fetches
    `https://<host>/.well-known/funkhaus.json` and keeps the site only if it answers as a
    Funkhaus speaking a protocol this version knows. Until then the menu offers only
-   **Einrichten …**. Settings can change the site later. **Bei der Anmeldung starten**, on by
-   default, makes Slipstream a login item; Settings and System Settings → General → Login Items
-   can turn it off. A Funkhaus that offers **In Slipstream verbinden** fills in its host by
+   **Einrichten …**. Settings can change the site later. At the first launch Slipstream also
+   asks once, "Slipstream bei der Anmeldung starten?", with **Ja** as the default; Settings and
+   System Settings → General → Login Items can change it later. A Funkhaus that offers **In Slipstream verbinden** fills in its host by
    itself: the link (`slipstream://connect?site=<host>`, [docs/funkhaus-api.md](docs/funkhaus-api.md),
    "Connect link") runs the same check and asks "Mit … verbinden?" before it keeps anything.
 3. **Quit Safari with ⌘Q and open it again**, after installing and after every update: a Safari

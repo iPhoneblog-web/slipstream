@@ -1,6 +1,7 @@
 import Foundation
 import HelperCore
 import Security
+import SystemConfiguration
 
 /// Where Slipstream keeps its files: `~/Library/Application Support/Slipstream`.
 enum Paths {
@@ -30,14 +31,14 @@ enum Paths {
     }
 
     /// The app group container the extension reads; created by hand when the system gives none
-    /// (an ad hoc build without the entitlement).
-    static var appGroup: URL {
+    /// (an ad hoc build without the entitlement). Asked once: containerURL is an XPC call.
+    static let appGroup: URL = {
         if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SlipstreamIDs.appGroup) {
             return url
         }
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Group Containers/\(SlipstreamIDs.appGroup)", isDirectory: true)
-    }
+    }()
 
     /// The toolchain's `versions.txt`, in `Contents/Resources`: codesign takes no data in
     /// `Contents/Helpers`.
@@ -102,7 +103,9 @@ enum KeyStore {
 struct AppPairing: Pairing {
     let onTunnel: @Sendable (TunnelConfig) async -> Void
 
-    static var macName: String { Host.current().localizedName ?? "Mac" }
+    /// The Mac's name from System Settings → Allgemein → Info, read once. Not
+    /// `Host.current()`, which resolves every address of the Mac and can wait on DNS.
+    static let macName: String = SCDynamicStoreCopyComputerName(nil, nil).map { $0 as String } ?? "Mac"
 
     static func storedTunnel() -> TunnelConfig? {
         guard let line = try? String(contentsOf: Paths.tunnel, encoding: .utf8) else { return nil }

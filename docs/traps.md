@@ -76,6 +76,15 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
   and closed about once a second. The menu reads `MenuMirror` instead: finished text, changed
   only when a line's text changes (times to the minute, fps and speed rounded), and held while a
   menu is tracking.
+- **A frozen Settings window** (1.3.0): every click froze it for seconds. Settings asked
+  `SMAppService.mainApp.status` on the main thread, an XPC call to the background task daemon
+  that takes about 0.5 s on a Mac Studio (measured 2026-10-28) and longer with many login
+  items; a toggle made four such calls. Now `LoginItem` is async and runs off the main thread,
+  and so do the keychain read for "Kopplung" and the models' disk use; the app group's URL and
+  the Mac's name are read once (`Host.current()` waits on DNS). `Watchdog` logs "main thread
+  blocked N ms" whenever the main queue takes 100 ms or more, and `bin/check-launch` fails on
+  such a line while Settings goes through its tabs. Nothing in a view's body or its `@State`
+  initial values may call a daemon, the keychain or the disk.
 - **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
   Settings has four tabs, each as tall as its content, in a resizable window with a minimum
   size.
