@@ -28,7 +28,8 @@ Three jobs, so that nothing runs beside a secret it does not need:
    signing inside out (each helper, the extension with its sandbox entitlements, the app) with
    the hardened runtime and a secure timestamp, notarising and stapling the app, the DMG
    signed, notarised and stapled. The keychain and the key go before the checks:
-   `codesign --verify --strict`, `spctl -a -vv`, `stapler validate`. Read access only.
+   `codesign --verify --strict`, `spctl -a -vv`, `stapler validate`, and `bin/check-launch`
+   (the app starts and Settings opens). Read access only.
 3. **publish**, on a tag only: the only job that may write; it publishes the release build's
    files and runs no code of this repository.
 

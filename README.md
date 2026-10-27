@@ -3,7 +3,8 @@
 Slipstream is the helper app on a Mac for the iPhoneblog video server (ADR-0007 in
 iphoneblog-wordpress). It lives in the menu bar and does two things:
 
-- **ProRes in the upload center.** A ProRes file dropped into the upload center in Safari is
+- **ProRes in the Funkhaus** (the upload center, `funkhaus.iphoneblog.de`, formerly
+  `upload.iphoneblog.de`, which keeps working). A ProRes file dropped into the Funkhaus in Safari is
   encoded on this Mac into an HEVC intermediate at 50 Mbit/s before the page uploads it
   ([docs/encoding.md](docs/encoding.md)). Its Safari extension carries the file from the page to
   the app and the result back ([docs/extension-protocol.md](docs/extension-protocol.md)).
@@ -18,7 +19,7 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
 
 ## Installieren
 
-Für Alex, oder wer sonst ProRes ins Upload-Center zieht. Einmal pro Mac, etwa fünf Minuten.
+Für Alex, oder wer sonst ProRes ins Funkhaus zieht. Einmal pro Mac, etwa fünf Minuten.
 
 1. **DMG laden:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg). Öffnen und
    **Slipstream** auf **Programme** ziehen. Danach das DMG im Finder auswerfen.
@@ -27,8 +28,9 @@ Für Alex, oder wer sonst ProRes ins Upload-Center zieht. Einmal pro Mac, etwa f
    kleines Wind-Icon oben rechts in der Menüleiste.
 3. **Die Safari-Extension einschalten:** Safari → **Einstellungen …** → **Erweiterungen**, bei
    **Slipstream** den Haken setzen. Safari fragt nach der Berechtigung für
-   `upload.iphoneblog.de`: **Immer erlauben** (oder „Auf dieser Website immer erlauben“).
-4. **Testen:** das Upload-Center in Safari öffnen (bzw. die Seite neu laden, falls sie schon
+   `funkhaus.iphoneblog.de` (und, falls gefragt, `upload.iphoneblog.de`): **Immer erlauben** (oder
+   „Auf dieser Website immer erlauben“).
+4. **Testen:** das Funkhaus in Safari öffnen (bzw. die Seite neu laden, falls sie schon
    offen war) und eine kurze ProRes-Datei hineinziehen. Statt der Meldung „ProRes wird hier
    nicht unterstützt“ zeigt die Seite jetzt den Fortschritt der Umwandlung.
 5. **Bei jedem Login automatisch starten** (empfohlen): Systemeinstellungen → **Allgemein** →
@@ -51,6 +53,7 @@ needs no app is a Swift package (`swift test`).
 ```
 bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
 bin/fetch-worker     the worker and its tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's release
+bin/check-launch     starts the built app and checks that Settings opens (CI)
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
 bin/rungs.zsh        ADR test 5: intermediates, the 4K rung from each, VMAF (docs/encoding.md)
 swift test           the tests (the fixtures are committed)
@@ -69,7 +72,7 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | Page | Read it for |
 |---|---|
 | [docs/encoding.md](docs/encoding.md) | The intermediate: what comes out, why 50 Mbit/s, the measurements |
-| [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the upload center, the extension and the app |
+| [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
 | [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp at `encoder`'s versions |
 | [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |

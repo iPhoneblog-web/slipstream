@@ -21,8 +21,9 @@ does.
 
 ## 1. Hello: is the helper there?
 
-The content script runs on `https://upload.iphoneblog.de/*`, in every frame, from
-`document_start`. The page asks:
+The content script runs on `https://funkhaus.iphoneblog.de/*` and `https://upload.iphoneblog.de/*`
+(the Funkhaus under its new and its old name), in every frame, from `document_start`; the
+bridge accepts its port from either origin. The page asks:
 
 ```js
 window.postMessage({ slipstream: 1, type: "hello", id: "h1" }, location.origin);

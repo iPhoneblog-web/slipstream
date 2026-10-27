@@ -84,6 +84,19 @@ final class LoopbackTests: XCTestCase {
         XCTAssertEqual(json(ok)["protocol"] as? Int, 1)
     }
 
+    /// Only a request with the right token counts as the bridge reaching the app.
+    func testSeenOnlyWithTheToken() async throws {
+        let count = Box(0)
+        let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying)
+        try await jobs.load()
+        let a = LoopbackAPI(token: "t0ken", version: "1", name: "Mac", jobs: jobs, pairing: FakePairing(),
+                            seen: { count.value += 1 })
+        _ = await call(a, "GET", "/v1/ping", headers: ["X-Slipstream-Token": "guess"])
+        XCTAssertEqual(count.value, 0)
+        _ = await call(a, "GET", "/v1/ping")
+        XCTAssertEqual(count.value, 1)
+    }
+
     func testPreflightAllowsPrivateNetwork() async throws {
         let a = try await api()
         let r = await a.handle(HTTPRequest(method: "OPTIONS", path: "/v1/jobs/u1/source",

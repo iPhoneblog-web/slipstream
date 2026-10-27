@@ -104,6 +104,9 @@ jobs:
           codesign -dv --verbose=2 dist/Slipstream.app 2>&1 | grep -E 'TeamIdentifier|Runtime|Timestamp'
           ls dist/Slipstream.app/Contents/Helpers
 
+      - name: Launch check (Settings opens)
+        run: bin/check-launch
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: slipstream
