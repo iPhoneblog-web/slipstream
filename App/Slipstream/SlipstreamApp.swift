@@ -34,6 +34,7 @@ final class Windows {
             w.identifier = NSUserInterfaceItemIdentifier(id)
             w.styleMask = resizable ? [.titled, .closable, .resizable, .miniaturizable] : [.titled, .closable]
             if let size { w.setContentSize(size) }
+            if resizable, let size { w.contentMinSize = NSSize(width: min(size.width, 440), height: min(size.height, 260)) }
             w.isReleasedWhenClosed = false
             w.center()
             open[id] = w
@@ -268,6 +269,8 @@ enum About {
     }
 }
 
+/// Settings: four tabs, each as tall as its content, in a window that can be resized (it fit no
+/// 13-inch screen as one long form in 1.1.0).
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @AppStorage("threads") private var threads = AppModel.maxThreads
@@ -278,8 +281,18 @@ struct SettingsView: View {
     @State private var loginItem = LoginItem.isOn
 
     var body: some View {
-        Form {
-            Section("Leistung") {
+        TabView {
+            Form {
+                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
+                Text("Ausschalten geht auch in den Systemeinstellungen → Allgemein → Anmeldeobjekte.")
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Version", value: model.version)
+                Button("Lizenzen …") { About.showLicences() }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Allgemein", systemImage: "gearshape") }
+
+            Form {
                 Stepper("CPU-Threads: \(threads) von \(AppModel.maxThreads)", value: $threads, in: 1...AppModel.maxThreads)
                 Toggle("Whisper darf die GPU nutzen", isOn: $gpu)
                 Picker("Aufträge gleichzeitig", selection: $jobs) {
@@ -289,12 +302,17 @@ struct SettingsView: View {
                 Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Funkhaus") {
+            .formStyle(.grouped)
+            .tabItem { Label("Leistung", systemImage: "cpu") }
+
+            Form {
                 LabeledContent("Funkhaus", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
                 Button("Anderes Funkhaus einrichten …") { model.showSetup() }
-                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
             }
-            Section("Kopplung") {
+            .formStyle(.grouped)
+            .tabItem { Label("Funkhaus", systemImage: "antenna.radiowaves.left.and.right") }
+
+            Form {
                 if let identity {
                     LabeledContent("Name", value: identity.name)
                     LabeledContent("Öffentlicher Schlüssel") {
@@ -305,9 +323,11 @@ struct SettingsView: View {
                 Text("Koppeln: im Funkhaus auf der Seite Encoder „Diesen Mac als Helper hinzufügen“, in Safari auf diesem Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            .formStyle(.grouped)
+            .tabItem { Label("Kopplung", systemImage: "link") }
         }
-        .formStyle(.grouped)
-        .frame(width: 460)
+        .padding(.top, 4)
+        .frame(minWidth: 440, idealWidth: 500, maxWidth: .infinity, minHeight: 260, idealHeight: 300, maxHeight: .infinity)
         .onChange(of: threads) { model.limitsChanged() }
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }

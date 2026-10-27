@@ -70,6 +70,9 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
   (`LSUIElement`, so never the active app): "Einstellungen …" did nothing in 1.0.1. Settings and
   the log are windows AppKit owns (`Windows` in `SlipstreamApp.swift`), opened after
   `NSApp.activate`. `bin/check-launch` opens Settings through the same path in CI.
+- **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
+  Settings has four tabs, each as tall as its content, in a resizable window with a minimum
+  size.
 
 ## Priority
 

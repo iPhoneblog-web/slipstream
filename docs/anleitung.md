@@ -35,8 +35,10 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
   Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
   einem Update von Slipstream fragt Safari das neu).
-- **Einstellungen …:** CPU-Threads, ob Whisper die GPU nutzen darf, Aufträge gleichzeitig, der
-  Stand der Kopplung.
+- **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
+  (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, ob Whisper die GPU
+  nutzen darf, Aufträge gleichzeitig), **Funkhaus** (welches, und ein anderes einrichten),
+  **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
 - **Bei der Anmeldung starten** (beim Einrichten an, in den Einstellungen umschaltbar):
   Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →

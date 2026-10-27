@@ -110,7 +110,7 @@ final class AppModel: ObservableObject {
     }
 
     func showSettings() {
-        windows.show("settings", title: "Slipstream – Einstellungen", size: NSSize(width: 460, height: 380)) {
+        windows.show("settings", title: "Slipstream – Einstellungen", size: NSSize(width: 500, height: 300), resizable: true) {
             SettingsView(model: self)
         }
     }
