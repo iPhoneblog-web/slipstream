@@ -3,8 +3,8 @@
 ## A release
 
 A tag `v<major>.<minor>.<patch>` on `main` is a release. `.github/workflows/build.yml` builds
-every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip` and
-`SHA256SUMS` as that tag's release, marked latest. The file names carry no version, so
+every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip`,
+`appcast.xml` and `SHA256SUMS` as that tag's release, marked latest. The file names carry no version, so
 `releases/latest/download/Slipstream.dmg` is always the newest.
 
 ```bash

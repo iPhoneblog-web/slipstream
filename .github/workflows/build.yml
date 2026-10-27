@@ -1,7 +1,7 @@
 # Every push and pull request: the tests, then a signed and notarised build on Apple Silicon. A
-# tag `v<major>.<minor>.<patch>` also publishes the release: Slipstream.dmg, Slipstream.zip and
-# SHA256SUMS, under names that stay the same, so .../releases/latest/download/Slipstream.dmg is
-# always the newest. docs/release.md.
+# tag `v<major>.<minor>.<patch>` also publishes the release: Slipstream.dmg, Slipstream.zip,
+# appcast.xml and SHA256SUMS, under names that stay the same, so .../releases/latest/download/
+# is always the newest (Sparkle reads appcast.xml there). docs/release.md.
 #
 # Three jobs, so that nothing runs beside a secret it does not need: the tests see no secret;
 # the signing job has the keychain and the notary key but only read access to the repository;
