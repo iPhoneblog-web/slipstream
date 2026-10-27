@@ -4,8 +4,8 @@
 
 A tag `v<major>.<minor>.<patch>` on `main` is a release. `.github/workflows/build.yml` builds
 every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip`,
-`appcast.xml` and `SHA256SUMS` as that tag's release, marked latest. The file names carry no version, so
-`releases/latest/download/Slipstream.dmg` is always the newest.
+`appcast.xml`, `SHA256SUMS` and `SHA256SUMS.sig` as that tag's release, marked latest. The file
+names carry no version, so `releases/latest/download/Slipstream.dmg` is always the newest.
 
 ```bash
 git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1
@@ -39,6 +39,15 @@ event).
   secret, checks the signature against the app's own `SUPublicEDKey`, and writes
   `appcast.xml`, which the release attaches. `bin/package` refuses a tagged build without a
   public key, and the publishing job a release without an appcast.
+- **`SHA256SUMS.sig`**, on a tag too: `tools/sign.swift` signs the release's `SHA256SUMS` with
+  the same key, after the same check against `SUPublicEDKey`. The file is the base64 of the
+  Ed25519 signature over the exact bytes of `SHA256SUMS`, one line without a newline. A mirror
+  of the DMG, such as a Funkhaus's, checks it against the public key in `project.yml`
+  (`SPARKLE_PUBLIC_ED_KEY`) and then the DMG against the sums. The publishing job refuses a
+  release without it. For a release from before (1.3.1 and older), run
+  `.github/workflows/sign-sums.yml` by hand with the tag: it checks the release's DMG and zip
+  against its sums, takes the public key from the app in its zip, signs, and attaches the
+  signature.
 - **Sparkle inside the app** is signed inside out by `bin/package`: its XPC services, Autoupdate,
   Updater.app, then the framework, like everything else with the hardened runtime.
 
@@ -73,7 +82,7 @@ entitlements, its extension point or its version.
 | `NOTARY_API_KEY_P8` | the App Store Connect team key `slipstream-notary` (access Developer), the `.p8` text |
 | `NOTARY_API_KEY_ID` | its key id |
 | `NOTARY_API_ISSUER_ID` | its issuer id |
-| `SPARKLE_ED_PRIVATE_KEY` | Sparkle's EdDSA private key, the base64 Ed25519 seed (see "Updates"); used on tags only |
+| `SPARKLE_ED_PRIVATE_KEY` | Sparkle's EdDSA private key, the base64 Ed25519 seed (see "Updates"); used on tags and by `sign-sums.yml` only |
 
 No agent handles the keys; the maintainer sets the secrets.
 
