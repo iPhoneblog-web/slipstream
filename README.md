@@ -15,6 +15,18 @@ the menu bar and does two things:
 Slipstream works for one Funkhaus site, set up at first launch. Its extension answers that site
 only and stays silent everywhere else ([docs/traps.md](docs/traps.md), "Origins").
 
+## What is a Funkhaus?
+
+A **Funkhaus** is a web app where a team uploads its videos and prepares their publication:
+titles, posters, cuts, captions. Behind it runs an encode queue
+([encode-queue](https://github.com/kyrios/encode-queue)) that turns each upload into the files
+readers get. The Funkhaus's own code is not public; what it offers Slipstream is:
+[docs/funkhaus-api.md](docs/funkhaus-api.md) describes that contract (the well-known file, the
+page's messages, pairing with the queue), enough to build a compatible site.
+
+Slipstream is the Funkhaus's helper on a Mac. It encodes ProRes before the browser uploads it,
+and, once paired, it takes encode jobs from the queue when the Mac has time.
+
 **Download:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg), the newest
 release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later.
 
@@ -71,6 +83,7 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | Page | Read it for |
 |---|---|
 | [docs/encoding.md](docs/encoding.md) | The intermediate: what comes out, why 50 Mbit/s, the measurements |
+| [docs/funkhaus-api.md](docs/funkhaus-api.md) | What a Funkhaus offers Slipstream: the well-known file, the page's messages, pairing |
 | [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
 | [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp: encode-queue's toolchain |
