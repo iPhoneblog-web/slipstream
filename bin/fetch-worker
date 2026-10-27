@@ -1,64 +1,39 @@
 #!/bin/zsh
-# Fetches what Slipstream embeds from kyrios/encode-queue's release, checked against its
-# SHA256SUMS: the worker's macOS arm64 binary into build/worker/encode-worker, and the macOS
-# arm64 toolchain (ffmpeg, ffprobe, whisper-cli at encoder's versions) into build/tools
-# (docs/worker.md, docs/tools.md). One build, encode-queue's, runs on encoder and on the Mac.
-# Without that release, or without an asset in it, it says so and exits 0: the app then runs
-# ProRes only.
-#   bin/fetch-worker [tag]    default v0.1.0
+# Fetches what Slipstream embeds from kyrios/encode-queue's release: the worker's macOS arm64
+# binary into build/worker/encode-worker, and the macOS arm64 toolchain (ffmpeg, ffprobe,
+# whisper-cli, versions.txt) into build/tools (docs/worker.md, docs/tools.md). One build,
+# encode-queue's, runs on encoder and on the Mac.
+#
+# The tag and both files' sha256 are pinned here. Anything else fails: a moved tag or a
+# replaced asset stops the build instead of shipping. A new worker is a change to these lines.
+#   bin/fetch-worker
 set -euo pipefail
 cd "${0:A:h}/.."
-tag=${1:-v0.1.0}
 repo=kyrios/encode-queue
+tag=v0.1.0
+worker=encode-worker-darwin-arm64
+worker_sha256=f4a60d4b046edf53f65f544e2de03b29fb1effa71065f3f8de24b7ff3dcd26ce
+toolchain=encode-toolchain-darwin-arm64.tar.gz
+toolchain_sha256=ee98e4a86c1fe18c9acc02f1cb064d1cda869cce6fdeb2c02760351ba65125ae
+
 rm -rf build/worker build/tools build/fetch
 mkdir -p build/worker build/tools build/fetch
-if ! gh release view "$tag" -R $repo >/dev/null 2>&1; then
-  print "no release $tag of $repo yet: building without the worker and its tools"
-  exit 0
-fi
+gh release download "$tag" -R $repo -D build/fetch -p $worker -p $toolchain
 cd build/fetch
-gh release download "$tag" -R $repo -p '*darwin*arm64*' -p 'SHA256SUMS*' -p '*checksums*'
-sums=(SHA256SUMS*(N) *checksums*(N))
-if (( ${#sums} == 0 )); then
-  print "release $tag has no checksums; refusing its files" >&2
-  exit 1
-fi
-for f in $sums; do shasum -a 256 -c --ignore-missing "$f"; done
+print -r -- "$worker_sha256  $worker
+$toolchain_sha256  $toolchain" | shasum -a 256 -c
 
-unpack() {  # archive dir
-  case $1 in
-    *.tar.gz|*.tgz) tar xzf "$1" -C "$2" ;;
-    *.tar.xz) tar xJf "$1" -C "$2" ;;
-    *.zip) ditto -x -k "$1" "$2" ;;
-    *) cp "$1" "$2/" ;;
-  esac
-}
-for a in *darwin*arm64*(N); do
-  if [[ $a == *tool* ]]; then unpack "$a" ../tools; else unpack "$a" ../worker; fi
-done
-
-# Flatten: the files the app expects, wherever the archive put them.
+mv $worker ../worker/encode-worker
+chmod +x ../worker/encode-worker
+tar xzf $toolchain -C ../tools --strip-components 1
 cd ..
-w=$(find worker -type f -name 'encode-worker*' ! -name '*.tar*' ! -name '*.zip' | head -1)
-if [[ -n $w && $w != worker/encode-worker ]]; then mv "$w" worker/encode-worker; fi
-for t in ffmpeg ffprobe whisper-cli versions.txt; do
-  f=$(find tools -type f -name $t | head -1)
-  if [[ -n $f && $f != tools/$t ]]; then mv "$f" tools/$t; fi
-done
-find worker tools -mindepth 1 -type d -empty -delete
 rm -rf fetch
 
 for f in worker/encode-worker tools/ffmpeg tools/ffprobe tools/whisper-cli; do
-  if [[ -f $f ]]; then
-    chmod +x $f
-    file $f | grep -q 'Mach-O 64-bit executable arm64' || { print "$f is not a macOS arm64 binary" >&2; exit 1; }
-    print "$f"
-  else
-    print "missing in $tag: $f"
-  fi
+  [[ -x $f ]] || { print "missing in $tag: $f" >&2; exit 1; }
+  file $f | grep -q 'Mach-O 64-bit executable arm64' || { print "$f is not a macOS arm64 binary" >&2; exit 1; }
 done
-[[ -x worker/encode-worker ]] && worker/encode-worker --version || true
-[[ -x tools/ffmpeg ]] && tools/ffmpeg -hide_banner -version | head -1 || true
-if [[ -x tools/ffmpeg && ! -f tools/versions.txt ]]; then
-  tools/ffmpeg -hide_banner -version | head -1 > tools/versions.txt
-fi
+[[ -f tools/versions.txt ]] || { print "missing in $tag: versions.txt" >&2; exit 1; }
+print "embedding encode-queue $tag: $(worker/encode-worker --version)"
+cat tools/versions.txt
+tools/ffmpeg -hide_banner -version | head -1

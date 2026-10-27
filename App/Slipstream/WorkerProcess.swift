@@ -43,7 +43,7 @@ final class WorkerProcess: @unchecked Sendable {
             "--ffmpeg", Paths.helper("ffmpeg").path, "--ffprobe", Paths.helper("ffprobe").path,
             "--whisper-cli", Paths.helper("whisper-cli").path, "--whisper-models", Paths.models.path,
             "--control", "stdio",
-        ]
+        ] + (Paths.whisperVersion.map { ["--whisper-version", $0] } ?? [])
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors

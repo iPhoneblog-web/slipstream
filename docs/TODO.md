@@ -2,10 +2,10 @@
 
 Open work, most important first. Delete an item when it is done.
 
-- **Embed the worker and its toolchain** once `kyrios/encode-queue` releases `v0.1.0`:
-  `bin/fetch-worker` picks both up in CI; check the asset names, the worker's flags and events
-  against [worker.md](worker.md), and correct the page, the script and
-  `HelperCore/WorkerProtocol.swift` where they differ.
+- **Thorsten's first real run of v1.0.0** is the extension's two checks ([traps.md](traps.md),
+  "Checks"): install, the extension on, pairing on the Encoder page, one ProRes upload inside
+  wp-admin. Record there what it showed, and in [extension-protocol.md](extension-protocol.md)
+  whether the upload center's CSP needs `frame-src safari-web-extension:`.
 - **A new Developer ID certificate before 2027-02-01**, when the current one ends with Apple's G1
   intermediate: make it as before, export it as a `.p12` without a password, and replace the
   secret `DEVELOPER_ID_P12_BASE64` ([release.md](release.md)).

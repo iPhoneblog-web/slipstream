@@ -15,6 +15,7 @@ what it reports. Without the binary, or before the Mac is paired, the app runs P
   --threads N --gpu true|false --jobs N
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
+  --whisper-version <from Resources/versions.txt>
 ```
 
 `<support>` is `~/Library/Application Support/Slipstream`. It starts only when `tunnel.conf`
@@ -45,10 +46,11 @@ After it, one JSON object per line:
 
 Its standard error goes to the log window and to the unified log.
 
-encode-queue implements this contract (kyrios/encode-queue pull request 1). It sends `job` at
-every phase change and once a second, and reads whisper.cpp's version from the `versions.txt`
-beside `whisper-cli`. Until its `v0.1.0` release exists the app ships without the worker;
-`HelperCore/WorkerProtocol.swift` and its tests hold the format.
+encode-queue implements this contract from `v0.1.0` on (its `worker-control.yaml`). It sends
+`job` at every phase change and once a second. whisper.cpp's version comes with
+`--whisper-version`: the toolchain's `versions.txt` lives in `Contents/Resources`, since codesign
+takes no data in `Contents/Helpers`. `bin/fetch-worker` pins the release by tag and sha256;
+`HelperCore/WorkerProtocol.swift` and its tests hold the format on this side.
 
 ## Pairing
 

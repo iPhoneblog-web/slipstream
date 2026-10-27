@@ -2,9 +2,6 @@
 # Builds Slipstream.app for Apple Silicon and packs it for download:
 #   bin/package            tests, build, dist/Slipstream.dmg, dist/Slipstream.zip, dist/SHA256SUMS
 #   bin/package --no-test  build only
-#   bin/package --check    also the extension's frame self-test (Extension/Check), for the
-#                          wp-admin check with the signed extension: dist/Slipstream-check.*.
-#                          A release never carries it (docs/traps.md, "Checks").
 # Signs ad hoc unless SIGN_IDENTITY names an identity in the keychain (CI: "Developer ID
 # Application"). With NOTARY_KEY (path to the App Store Connect .p8), NOTARY_KEY_ID and
 # NOTARY_ISSUER it also notarises and staples the app and the disk image (docs/release.md).
@@ -14,16 +11,14 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 
-test=1 check=0
+test=1
 for a in "$@"; do
   case $a in
     --no-test) test=0 ;;
-    --check) check=1 ;;
     *) print "unknown option $a" >&2; exit 64 ;;
   esac
 done
 name=Slipstream
-(( check )) && name=Slipstream-check
 if (( test )); then
   swift test
 fi
@@ -46,26 +41,29 @@ mkdir -p dist
 ditto build/dd/Build/Products/Release/Slipstream.app "$app"
 sed -i '' "s/\"version\": \"0.0.0\"/\"version\": \"$version\"/" "$appex/Contents/Resources/manifest.json"
 plutil -lint "$app/Contents/Info.plist" "$appex/Contents/Info.plist" >/dev/null
-if (( check )); then
-  cp Extension/Check/selftest.js "$appex/Contents/Resources/"
-  python3 -I -c 'import json,sys
-p=sys.argv[1]; m=json.load(open(p)); m["content_scripts"][0]["js"].append("selftest.js")
-json.dump(m, open(p, "w"), indent=2)' "$appex/Contents/Resources/manifest.json"
-fi
 python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$appex/Contents/Resources/manifest.json"
-# The self-test only where it was asked for.
-if (( ! check )) && grep -q selftest "$appex/Contents/Resources/manifest.json" "$appex/Contents/Resources/"*.js; then
-  print "the self-test is in a release build" >&2
-  exit 1
-fi
+
 
 # Contents/Helpers: the ProRes encode (always), the worker and its tools (when built).
 helpers="$app/Contents/Helpers"
 mkdir -p "$helpers"
 cp "$cli_dir/slipstream-cli" "$helpers/"
-for f in build/tools/ffmpeg build/tools/ffprobe build/tools/whisper-cli build/tools/versions.txt build/worker/encode-worker; do
+for f in build/tools/ffmpeg build/tools/ffprobe build/tools/whisper-cli build/worker/encode-worker; do
   [[ -f $f ]] && cp "$f" "$helpers/"
 done
+# Data is no code: codesign takes only executables in Contents/Helpers.
+for f in build/tools/versions.txt build/tools/versions.json; do
+  [[ -f $f ]] && cp "$f" "$app/Contents/Resources/"
+done
+# REQUIRE_WORKER=1 (CI) refuses the ProRes-only fallback.
+if [[ -x "$helpers/encode-worker" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
+  print "embedded: encode-worker $("$helpers/encode-worker" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
+elif [[ -n ${REQUIRE_WORKER:-} ]]; then
+  print "no worker or tools in build/: run bin/fetch-worker" >&2
+  exit 1
+else
+  print "embedded: no worker, ProRes only"
+fi
 # Without debug symbols a binary carries no build paths, so no user name of the Mac it was
 # built on.
 for f in "$helpers"/*(.x) "$app/Contents/MacOS/Slipstream" "$appex/Contents/MacOS/Slipstream Extension"; do

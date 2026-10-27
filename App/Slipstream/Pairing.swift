@@ -24,6 +24,19 @@ enum Paths {
             .appendingPathComponent("Library/Group Containers/\(SlipstreamIDs.appGroup)", isDirectory: true)
     }
 
+    /// The toolchain's `versions.txt`, in `Contents/Resources`: codesign takes no data in
+    /// `Contents/Helpers`.
+    static var toolVersions: String? {
+        Bundle.main.url(forResource: "versions", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+    }
+
+    /// whisper.cpp's release from it (`whisper.cpp v1.9.5`), for the worker, which looks for the
+    /// file beside `whisper-cli` otherwise.
+    static var whisperVersion: String? {
+        toolVersions?.split(separator: "\n").first { $0.hasPrefix("whisper.cpp ") }
+            .map { String($0.dropFirst("whisper.cpp ".count)) }
+    }
+
     /// The tools inside the app: `Contents/Helpers`. In a debug build `SLIPSTREAM_WORKER`
     /// points at a stand-in worker; never in a release, where it would hand the private key to
     /// whatever binary the environment names.

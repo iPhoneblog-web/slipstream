@@ -52,8 +52,9 @@ Things that cost time once, so they cost it only once. Each says what happens an
 
 **The extension's two checks** (ADR-0007 test 1, the part that needs the signed extension):
 the bridge inside wp-admin's frame and under the upload center's real page and CSP, and the
-intermediate fetched back in 64 MiB `Range` slices through the bridge. The frame check needs
-code inside the upload center's frame, which wp-admin's page cannot script, so it uses the
-**check build** (`bin/package --check`, CI artifact `slipstream-check`): its content script
-answers a `selftest` message from `https://www.iphoneblog.de` with timings. Any page of that
-origin could drive it, so a release never carries it, and `bin/package` fails if one does.
+intermediate fetched back in 64 MiB `Range` slices through the bridge. **Thorsten's first real
+run of v1.0.0 is these checks**: he installs it, turns the extension on in Safari, pairs his Mac
+on the Encoder page and uploads one ProRes file through the upload center inside wp-admin. The
+pairing passes the bridge in the frame; the upload passes the file in 64 MiB slices and the
+intermediate back in 64 MiB `Range` slices. A test build with a self-test in the frame was
+built and dropped: any page of wp-admin's origin could have driven it.
