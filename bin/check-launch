@@ -1,8 +1,14 @@
 #!/bin/zsh
 # Starts the built app and checks that Settings opens: `-openSettings YES` takes the menu's own
 # path (AppModel.showSettings), and the app must then own a normal window on screen within 10 s.
-# Runs in CI after bin/package. It refuses to run beside another Slipstream: two apps would
-# share one app group file, the one the Safari extension reads.
+# With `-cycleSettingsTabs YES` Settings shows each tab once. Then it hands the app a connect
+# link (slipstream://connect?site=…, docs/funkhaus-api.md): the setup window must open beside
+# Settings, and no site may be saved, since only the user's "Verbinden" saves one. From the
+# app's "settings tabs: start" on, its watchdog must log no wait of the main thread of 250 ms or
+# more (docs/traps.md, "A frozen Settings window"); it logs from 100 ms, and those are shown with
+# the app's log around them. 1.3.0's daemon call took 500 ms and more per call; a runner, a VM
+# slower than a Mac, may need over 100 ms for a tab's first layout. Runs in CI after bin/package. It refuses to run beside another
+# Slipstream: two apps would share one app group file, the one the Safari extension reads.
 #   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
 set -euo pipefail
 cd "${0:A:h}/.."
@@ -11,26 +17,77 @@ if pgrep -x Slipstream >/dev/null; then
   print "another Slipstream is running; not starting a second one" >&2
   exit 1
 fi
-"$app/Contents/MacOS/Slipstream" -openSettings YES &
+site=~/Library/Group\ Containers/W9N692KH39.io.github.kyrios.slipstream/site.json
+had_site=0
+[[ -f $site ]] && had_site=1
+launched_at=$(date '+%Y-%m-%d %H:%M:%S')
+"$app/Contents/MacOS/Slipstream" -openSettings YES -cycleSettingsTabs YES &
 pid=$!
 trap 'kill $pid 2>/dev/null || true' EXIT
-for i in {1..20}; do
-  sleep 0.5
-  # Layer 0 is a normal window; the menu bar item is another layer. Window titles need screen
-  # recording rights, the owner and the layer do not.
-  if swift - $pid <<'SWIFT'
+
+# Waits up to 10 s until the app owns at least $1 normal windows on screen. Layer 0 is a normal
+# window; the menu bar item is another layer. Window titles need screen recording rights, the
+# owner and the layer do not.
+windows() {
+  for i in {1..20}; do
+    sleep 0.5
+    if swift - $pid $1 <<'SWIFT'
 import CoreGraphics
 import Foundation
-let pid = Int(CommandLine.arguments[1])!
+let pid = Int(CommandLine.arguments[1])!, want = Int(CommandLine.arguments[2])!
 let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
 let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
-if let w = mine.first, let b = w[kCGWindowBounds as String] as? [String: Double] {
-    print("settings window on screen: \(Int(b["Width"] ?? 0))x\(Int(b["Height"] ?? 0))")
-    exit(0)
+guard mine.count >= want else { exit(1) }
+for w in mine {
+    let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
+    print("window on screen: \(Int(b["Width"] ?? 0))x\(Int(b["Height"] ?? 0))")
 }
-exit(1)
+exit(0)
 SWIFT
-  then exit 0; fi
+    then return 0; fi
+  done
+  return 1
+}
+
+# The first launch opens the setup window too, when no site is set up; Settings comes on top.
+first=1
+(( had_site )) || first=2
+windows $first || { print "no settings window within 10 s" >&2; exit 1; }
+print "settings: ok"
+logged() {  # waits up to 10 s for a line of the app's log since $1 that contains $2
+  for i in {1..20}; do
+    sleep 0.5
+    /usr/bin/log show --start "$1" --predicate "subsystem == \"io.github.kyrios.slipstream\" AND eventMessage CONTAINS \"$2\"" \
+      --style compact 2>/dev/null | grep -q -- "$2" && return 0
+  done
+  return 1
+}
+logged "$launched_at" "settings tabs cycled" || { print "Settings did not go through its tabs within 10 s" >&2; exit 1; }
+print "settings tabs: ok"
+
+# example.org's hosts serve no Funkhaus, so the check fails; the window shows it, nothing saves.
+# The app logs the link it took (AppModel.open), and the setup window is on screen beside Settings.
+since=$(date '+%Y-%m-%d %H:%M:%S')
+open -a "$PWD/$app" 'slipstream://connect?site=funkhaus.example.org'
+logged "$since" "connect link: funkhaus.example.org" || { print "the app did not take the connect link within 10 s" >&2; exit 1; }
+windows 2 || { print "no setup window beside Settings after the connect link" >&2; exit 1; }
+sleep 3
+if (( ! had_site )) && [[ -f $site ]]; then
+  print "the connect link saved a site without the user's click" >&2
+  exit 1
+fi
+print "connect link: ok"
+
+timeline=$(/usr/bin/log show --start "$launched_at" --predicate 'subsystem == "io.github.kyrios.slipstream"' \
+  --style compact 2>/dev/null | awk '/settings tabs: start/ { on = 1 } on' || true)
+waits=$(print -r -- "$timeline" | grep -o 'main thread blocked [0-9]*' | awk '{ print $4 }' || true)
+if [[ -n $waits ]]; then
+  print "the app's log from the tab cycle on:\n$timeline"
+fi
+for ms in ${(f)waits}; do
+  if (( ms >= 250 )); then
+    print "the main thread waited $ms ms while Settings and the link ran" >&2
+    exit 1
+  fi
 done
-print "no settings window within 10 s" >&2
-exit 1
+print "main thread: no wait of 250 ms or more${waits:+ (from 100 ms: ${(j:, :)${(f)waits}} ms)}"

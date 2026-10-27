@@ -19,7 +19,9 @@ helper (Slipstream's loopback endpoint on 127.0.0.1)
 **The page never sees the port or the token**, and never fetches `127.0.0.1` itself: Safari
 blocks that from an HTTPS page and from a content script ([traps.md](traps.md)). Only the
 bridge does. **Everything here happens on the configured site only**; on every other page the
-extension stays silent ([traps.md](traps.md), "Origins").
+extension stays silent ([traps.md](traps.md), "Origins"), with one exception from 1.3.1: a page
+that proves to be another Funkhaus hears that Slipstream is set up elsewhere and may ask to
+connect (section 1, "Another Funkhaus").
 
 ## 1. Hello: is the helper there?
 
@@ -105,6 +107,37 @@ prompt, and answers once the app's loopback is up, after at most about 10 s:
 - It is a message, not a URL scheme: the extension already reaches the app extension by
   native messaging, which starts the app with no Safari prompt and reports whether it came up; a
   `slipstream://` link would ask the user each time and could not tell the page anything.
+
+### Another Funkhaus: "other-site" and connect (since 1.3.1)
+
+A Funkhaus page that is **not** the site Slipstream is set up for gets an answer to its `hello`
+only when it proves to be a Funkhaus: after the hello, the content script fetches the page's own
+`/.well-known/funkhaus.json` (same origin, no cookies, no redirect) and needs `app: "funkhaus"`
+and a protocol it speaks. A page that never says hello causes no request; a page without a valid
+file gets no answer, as before.
+
+```js
+{ slipstream: 1, type: "hello", re: "h1", ok: true, extension: "1.3.1", protocol: 1,
+  helper: { present: false, reason: "other-site" } }   // or "not-set-up" before any setup
+```
+
+- It names neither the configured site nor the Mac, carries no port, and the extension puts no
+  bridge into the page and says no `ready`. `launch` stays the configured site's.
+- The page may then ask Slipstream to connect to it:
+
+  ```js
+  window.postMessage({ slipstream: 1, type: "connect", id: "c1" }, location.origin);
+  // → { slipstream: 1, type: "connect", re: "c1", ok: true }       Slipstream's question is open
+  // → { slipstream: 1, type: "connect", re: "c1", ok: false, error: { code: "connect-failed", … } }
+  ```
+
+  The extension opens the app's connect link (`slipstream://connect?site=<the page's own
+  host>`, [funkhaus-api.md](funkhaus-api.md), section 5) through the app extension, with no
+  Safari prompt; a host in the message is ignored. The app checks the host's well-known file and
+  asks "Mit <name> (<host>) verbinden? Bisher: <old host>". It switches only after that click;
+  the pairing stays. `ok: true` means the question is on screen, not that the user said yes.
+- After the switch, a `hello` (from 2 s on) gets the site's answer with a port. The page may say
+  hello again when its tab becomes visible, as for "Slipstream starten".
 
 ## 2. The port: requests, answers, events
 

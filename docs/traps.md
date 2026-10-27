@@ -40,12 +40,16 @@ Things that cost time once, so they cost it only once. Each says what happens an
 **Slipstream answers one site**, the Funkhaus set up at first launch (`SiteConfig`, the app
 group's `site.json`). The manifest matches every https page, because the site is the user's
 choice and a Safari extension cannot change its matches at run time; each part checks the origin
-itself, and a page elsewhere gets no answer, no bridge and no loopback:
+itself, and a page elsewhere gets no answer, no bridge and no loopback. The one exception
+(1.3.1): a page that says hello and serves a valid `/.well-known/funkhaus.json` itself hears
+`other-site` or `not-set-up`, never which site, and may send `connect`, which opens the app's
+question for that page's own host:
 
 | where | checks | test |
 |---|---|---|
 | the background (`background.js`) | answers a content script only `{match}` for its page; `presence` and `launch` only for a page of the site; the port and token only to the bridge | `Tests/extension`: "a page elsewhere learns nothing", "only the bridge the port and token", "before setup nobody matches" |
-| the content script (`content.js`) | asks once per page whether it is the site; elsewhere it answers no `hello` or `launch` and puts no frame into the page | "silent on a foreign page, no bridge in it" |
+| the content script (`content.js`) | asks whether the page is the site; elsewhere it answers no `launch` and puts no frame into the page, and answers `hello` and `connect` only after the page's own well-known file proved a Funkhaus, fetched only after a hello | "silent on a foreign page, no bridge in it", "a page that never says hello causes no request", "no answer on a page without a valid funkhaus.json", "a proven Funkhaus elsewhere hears other-site, no port, no bridge, no host" |
+| `connect` (background, app extension, app) | the host is the sender's own origin, never the message's; never for the configured site or plain http; the app parses the link strictly and switches only on "Verbinden" | "connect: … only for a proven Funkhaus", "background: connect names the sender's host", `ConnectLinkTests`, bin/check-launch |
 | the bridge (`bridge.js`) | web-accessible on every https page, so any page could frame it: it takes a port only from a parent on the site, and names that site to the loopback | "a parent elsewhere gets no port", "no site set up, no port" |
 | the loopback (`LoopbackAPI`) | the request's `Origin` must be an extension page, the token must match, and `X-Slipstream-Site` must be the configured site; before setup nothing passes | `LoopbackTests`: `testOnlyTheExtensionsOrigin`, `testOnlyTheConfiguredSite` |
 | the ProRes jobs (`ProResJobs`) | each job keeps the site that made it; after a site change the new site neither lists, reads, writes nor deletes the old one's | `testJobsBelongToTheirSite` |
@@ -76,6 +80,17 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
   and closed about once a second. The menu reads `MenuMirror` instead: finished text, changed
   only when a line's text changes (times to the minute, fps and speed rounded), and held while a
   menu is tracking.
+- **A frozen Settings window** (1.3.0): every click froze it for seconds. Settings asked
+  `SMAppService.mainApp.status` on the main thread, an XPC call to the background task daemon
+  that takes about 0.5 s on a Mac Studio (measured 2026-10-28) and longer with many login
+  items; a toggle made four such calls. Now `LoginItem` is async and runs off the main thread,
+  and so do the keychain read for "Kopplung" and the models' disk use; the app group's URL and
+  the Mac's name are read once (`Host.current()` waits on DNS). `Watchdog` logs "main thread
+  blocked N ms" whenever the main queue takes 100 ms or more. `bin/check-launch` goes through the
+  Settings tabs and a connect link and fails on a wait of 250 ms or more; it shows those from
+  100 ms with the app's log around them (a CI runner may need over 100 ms for a tab's first
+  layout). Nothing in a view's body or its `@State`
+  initial values may call a daemon, the keychain or the disk.
 - **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
   Settings has four tabs, each as tall as its content, in a resizable window with a minimum
   size.

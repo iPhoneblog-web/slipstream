@@ -1,13 +1,14 @@
-// The background asks Slipstream's app extension (native messaging) three things: which site the
-// app is set up for, whether the app runs (and on which port, with which token), and to start it.
-// It answers a content script only on that site, and the port and token only to the bridge
-// (docs/extension-protocol.md, docs/traps.md "Origins").
+// The background asks Slipstream's app extension (native messaging) four things: which site the
+// app is set up for, whether the app runs (and on which port, with which token), to start it,
+// and to open the app's connect link for a page's own host. It answers a content script only on
+// that site, the port and token only to the bridge; elsewhere only whether a site is set up at
+// all, and connect (docs/extension-protocol.md, docs/traps.md "Origins").
 const APP = "io.github.kyrios.slipstream";
 const BRIDGE = browser.runtime.getURL("bridge.html");
 
-async function native(type) {
+async function native(type, extra) {
   try {
-    return await browser.runtime.sendNativeMessage(APP, { type });
+    return await browser.runtime.sendNativeMessage(APP, Object.assign({ type }, extra || {}));
   } catch (e) {
     return null;
   }
@@ -55,6 +56,19 @@ async function answer(msg, sender) {
     return r && r.present
       ? { present: true, launched: !!r.launched, version: r.version, name: r.name }
       : { present: false, launched: !!(r && r.launched), reason: (r && r.reason) || "not-running", error: r && r.error };
+  }
+  if (msg.type === "setup") {
+    // For a Funkhaus page elsewhere (the content script checked its well-known file): set up or
+    // not, never which site.
+    return { configured: !!(await site()) };
+  }
+  if (msg.type === "connect") {
+    // The host is the sender's own, as the page's URL says; never one from the message. The app
+    // checks it again and asks the user before it switches.
+    const origin = originOf(sender && sender.url);
+    if (!origin || !origin.startsWith("https://") || origin === (await site())) return null;
+    const r = await native("connect", { site: new URL(origin).host });
+    return { opened: !!(r && r.opened) };
   }
   if (msg.type === "loopback") {
     // Only the bridge, the extension's own page, learns the port, the token and the site; it

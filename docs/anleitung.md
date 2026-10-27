@@ -4,6 +4,17 @@ Slipstream wandelt ProRes-Dateien, die du ins Funkhaus ziehst, auf deinem Mac um
 sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
 Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#install).
 
+## Mit dem Funkhaus verbinden
+
+- Bietet das Funkhaus **In Slipstream verbinden** an: anklicken. Slipstream öffnet sich, prüft
+  das Funkhaus und fragt „Mit … verbinden?“. Nur **Verbinden** speichert es; ein Link allein
+  richtet nichts ein, denn jede Website kann ihn schicken. Verbinde nur mit einem Funkhaus, dem
+  du vertraust.
+- Sonst: beim ersten Start den Hostnamen eintippen, etwa `funkhaus.example.org`, und **Prüfen
+  und speichern**.
+- Ein anderes Funkhaus geht genauso, per Link oder in Einstellungen → Funkhaus. Danach Safari
+  mit ⌘Q beenden und neu öffnen. Die Kopplung bleibt.
+
 ## ProRes hochladen
 
 - In Final Cut wie gewohnt als ProRes exportieren und die Datei ins Funkhaus ziehen, wie
@@ -41,8 +52,8 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   laden oder bereit sind, wie schnell, wie viel Platz sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
-- **Bei der Anmeldung starten** (beim Einrichten an, in den Einstellungen umschaltbar):
-  Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
+- **Bei der Anmeldung starten** (beim ersten Start fragt Slipstream einmal, „Ja“ ist
+  vorgewählt; in den Einstellungen umschaltbar): Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
   Anmeldeobjekte; dort ausgeschaltet, zeigen es die Einstellungen auch aus.
 - **Nach Updates suchen …:** Slipstream sucht ohnehin einmal am Tag und fragt, bevor es eine neue
   Version installiert; abschalten in Einstellungen → Allgemein. Danach Safari mit ⌘Q beenden und

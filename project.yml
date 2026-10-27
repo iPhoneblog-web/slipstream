@@ -59,6 +59,11 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSApplicationCategoryType: public.app-category.video
         LSUIElement: true
+        # The connect link a Funkhaus offers, slipstream://connect?site=<host>
+        # (docs/funkhaus-api.md, "Connect link").
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.kyrios.slipstream.connect
+            CFBundleURLSchemes: [slipstream]
         # Sparkle: the appcast every release publishes beside its DMG, checked once a day.
         SUFeedURL: https://github.com/kyrios/slipstream/releases/latest/download/appcast.xml
         SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)

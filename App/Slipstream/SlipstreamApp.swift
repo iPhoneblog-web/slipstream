@@ -1,5 +1,6 @@
 import AppKit
 import HelperCore
+import os
 import SwiftUI
 
 @main
@@ -53,15 +54,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     /// The menu's text, still while a menu is open (MenuMirror).
     lazy var mirror = MenuMirror(model: model)
+    private let watchdog = Watchdog()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A write to a worker that just died must fail with EPIPE, not end the app.
         signal(SIGPIPE, SIG_IGN)
+        watchdog.start()
         model.start()
         // bin/check-launch: `-openSettings YES` opens Settings the way the menu does, and the
         // script checks that the window is on screen.
         if UserDefaults.standard.bool(forKey: "openSettings") {
             model.showSettings()
+        }
+    }
+
+    /// `slipstream://connect?site=<host>` from a Funkhaus page, also as the app's first launch:
+    /// the setup window checks the host and asks before it keeps it.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme?.lowercased() == ConnectLink.scheme {
+            model.open(url)
         }
     }
 
@@ -225,12 +236,18 @@ struct SettingsView: View {
     @AppStorage("jobs") private var jobs = 1
     @State private var identity: PairingIdentity?
     /// The real state: the user can turn it off in System Settings → Allgemein → Anmeldeobjekte.
-    @State private var loginItem = LoginItem.isOn
+    /// nil until macOS answered, off the main thread (LoginItem).
+    @State private var loginItem: Bool?
+    @State private var tab = "general"
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             Form {
-                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
+                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem ?? false }, set: { on in
+                    loginItem = on
+                    Task { loginItem = await LoginItem.set(on) }
+                }))
+                .disabled(loginItem == nil)
                 Text("Ausschalten geht auch in den Systemeinstellungen → Allgemein → Anmeldeobjekte.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Automatisch nach Updates suchen", isOn: Binding(
@@ -242,6 +259,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Allgemein", systemImage: "gearshape") }
+            .tag("general")
 
             Form {
                 Stepper("CPU-Threads: \(threads) von \(AppModel.maxThreads)", value: $threads, in: 1...AppModel.maxThreads)
@@ -256,6 +274,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Leistung", systemImage: "cpu") }
+            .tag("performance")
 
             Form {
                 LabeledContent("Funkhaus", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
@@ -263,6 +282,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Funkhaus", systemImage: "antenna.radiowaves.left.and.right") }
+            .tag("site")
 
             Form {
                 if let identity {
@@ -277,14 +297,31 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Kopplung", systemImage: "link") }
+            .tag("pairing")
         }
         .padding(.top, 4)
         .frame(minWidth: 440, idealWidth: 500, maxWidth: .infinity, minHeight: 260, idealHeight: 300, maxHeight: .infinity)
         .onChange(of: threads) { model.limitsChanged() }
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
-        .task { identity = try? await AppPairing { _ in }.identity() }
-        .onAppear { loginItem = LoginItem.isOn }
+        // The keychain and the login item answer off the main thread; the window never waits.
+        .task { identity = try? await Task.detached { try await AppPairing { _ in }.identity() }.value }
+        .task { loginItem = await LoginItem.isOn() }
+        // bin/check-launch: `-cycleSettingsTabs YES` shows each tab once, while the watchdog
+        // logs any wait of the main thread.
+        .task {
+            guard UserDefaults.standard.bool(forKey: "cycleSettingsTabs") else { return }
+            let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "check")
+            // After the launch has settled: the check counts waits from here on.
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            log.notice("settings tabs: start")
+            for t in ["performance", "site", "pairing", "general"] {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                log.notice("settings tab: \(t, privacy: .public)")
+                tab = t
+            }
+            log.notice("settings tabs cycled")
+        }
     }
 }
 
@@ -320,8 +357,7 @@ struct ModelsSection: View {
         } header: {
             Text("Whisper-Modelle")
         }
-        .onAppear { diskBytes = Paths.modelsBytes }
-        .onChange(of: model.models) { diskBytes = Paths.modelsBytes }
+        .task(id: model.models) { diskBytes = await Task.detached(priority: .utility) { Paths.modelsBytes }.value }
     }
 
     /// `ggml-large-v3-turbo.bin` → `large-v3-turbo`.
@@ -351,13 +387,42 @@ struct ModelsSection: View {
     }
 }
 
+/// The one question at the first launch (AppModel.askLoginItemOnce); "Ja" is the default.
+struct LoginQuestion: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Slipstream bei der Anmeldung starten?").font(.headline)
+            Text("Dann ist Slipstream nach jeder Anmeldung da, für ProRes im Funkhaus und für Aufträge des Encoders, ohne dass du es öffnest. Ändern geht jederzeit in Einstellungen → Allgemein.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Nein") { answer(false) }
+                    .keyboardShortcut(.cancelAction)
+                Button("Ja") { answer(true) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+
+    private func answer(_ yes: Bool) {
+        model.answerLoginItem(yes)
+        NSApp.keyWindow?.close()
+    }
+}
+
 /// First launch, and "Anderes Funkhaus einrichten": the Funkhaus, checked before it is kept.
 struct SetupView: View {
     @ObservedObject var model: AppModel
     @State private var host = ""
     @State private var problem: String?
     @State private var busy = false
-    @State private var atLogin = true
+    /// A site a connect link named, checked, waiting for the user's yes.
+    @State private var confirm: SiteConfig?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -368,7 +433,7 @@ struct SetupView: View {
             TextField("funkhaus.example.org", text: $host)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { check() }
-            Toggle("Bei der Anmeldung starten", isOn: $atLogin)
+                .onChange(of: host) { if host != confirm?.host { confirm = nil } }
             if let problem {
                 Text(problem).font(.callout).foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
@@ -379,34 +444,79 @@ struct SetupView: View {
             Text("Nach dem Installieren oder einem Update: Safari mit ⌘Q beenden und neu öffnen, sonst sieht Safari die Extension nicht.")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                if busy { ProgressView().controlSize(.small) }
-                Button("Prüfen und speichern") { check() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(busy || host.trimmingCharacters(in: .whitespaces).isEmpty)
+            if let confirm {
+                // A connect link: any website can send one, so nothing is kept before this click.
+                Text("Mit \(confirm.name) (\(confirm.host)) verbinden?").font(.headline)
+                if let old = model.site?.host, old != confirm.host {
+                    Text("Bisher: \(old)").font(.callout)
+                }
+                Text("Ein Link oder eine Funkhaus-Seite hat Slipstream geöffnet. Verbinde nur, wenn du diesem Funkhaus vertraust: Es bekommt deine ProRes-Dateien und kann diesen Mac als Encoder nutzen. Die Kopplung bleibt.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Abbrechen") { self.confirm = nil; NSApp.keyWindow?.close() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Verbinden") { keep(confirm) }
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    if busy { ProgressView().controlSize(.small) }
+                    Button("Prüfen und speichern") { check() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(busy || host.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
         .padding(20)
         .frame(width: 480)
-        .onAppear {
-            host = model.site?.host ?? ""
-            // A first setup starts at login by default; setting up another Funkhaus shows how it is.
-            if model.site != nil { atLogin = LoginItem.isOn }
+        .onAppear { host = model.site?.host ?? "" }
+        .task(id: model.connectRequest?.id) { await connect() }
+    }
+
+    /// A connect link: the host into the field, the usual check, then the question.
+    private func connect() async {
+        guard let request = model.takeConnectRequest() else { return }
+        confirm = nil
+        problem = request.problem
+        guard let linked = request.host else { return }
+        host = linked
+        busy = true
+        switch await model.lookUpSite(linked) {
+        case .failure(let p): problem = p.message
+        case .success(let found): confirm = found
         }
+        busy = false
     }
 
     private func check() {
         busy = true
         problem = nil
+        let before = model.site?.host
         Task {
             problem = await model.checkSite(host)
             busy = false
-            if problem == nil {
-                LoginItem.set(atLogin)
-                NSApp.keyWindow?.close()
-            }
+            if problem == nil { done(before) }
         }
+    }
+
+    private func keep(_ found: SiteConfig) {
+        let before = model.site?.host
+        problem = model.saveSite(found)
+        confirm = nil
+        if problem == nil { done(before) }
+    }
+
+    /// Saved: the window closed, and when the Funkhaus changed, Safari's restart.
+    private func done(_ before: String?) {
+        NSApp.keyWindow?.close()
+        guard let before, let site = model.site, site.host != before else { return }
+        let alert = NSAlert()
+        alert.messageText = "Safari mit ⌘Q beenden und neu öffnen"
+        alert.informativeText = "Slipstream arbeitet jetzt für \(site.name) (\(site.host)). Erst nach einem Neustart von Safari antwortet die Extension dort zuverlässig."
+        alert.runModal()
     }
 }
 
