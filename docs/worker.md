@@ -59,10 +59,6 @@ keep) and to `~/Library/Logs/Slipstream/worker.log`.
 
 ## When the worker stops
 
-Up to 1.3.1 the app started a stopped worker again every 10 s for ever, said only "Keine
-Verbindung zum Encoder", and kept its standard error nowhere on disk; a start that failed was
-never tried again. A Mac Studio took no jobs and left no trace of why. Now:
-
 - **The menu says why**: "Encoder gestoppt: <reason>, neuer Versuch <time>". The reason
   (`HelperCore.WorkerExit`) is the worker's last word on standard error: a Go `panic:` line, else
   its `encode-worker: …` line, else its last line; and how it ended (`Status N`, or `Signal N`
