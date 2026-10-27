@@ -106,6 +106,9 @@ public actor ProResJobs {
         var status: JobStatus
         var ranges: ByteRanges
         var sourceName: String
+        /// The Funkhaus site (origin) that made the job. Only that site sees, reads or deletes
+        /// it: after "Andere Seite einrichten" the new site does not reach the old one's files.
+        var site: String?
     }
 
     public let root: URL
@@ -165,9 +168,10 @@ public actor ProResJobs {
     private func sourceURL(_ r: Record) -> URL { dir(r.status.uploadId).appendingPathComponent(r.sourceName) }
     private func intermediateURL(_ id: String) -> URL { dir(id).appendingPathComponent("intermediate.mp4") }
 
-    private func record(_ id: String) throws -> Record {
+    /// The job under `id`, for `site` only; another site's job is as unknown as none.
+    private func record(_ id: String, site: String?) throws -> Record {
         guard Self.isValidID(id) else { throw JobError("bad-request", "Ungültige Upload-ID.") }
-        guard let r = records[id] else { throw JobError("unknown-job", "Slipstream kennt diesen Upload nicht.") }
+        guard let r = records[id], r.site == site else { throw JobError("unknown-job", "Slipstream kennt diesen Upload nicht.") }
         return r
     }
 
@@ -188,10 +192,10 @@ public actor ProResJobs {
 
     /// Creates the job, or returns the one under that id. Another file under the same id is
     /// `file-mismatch`.
-    public func open(id: String, name: String, size: Int64, lastModified: Int64?) throws -> JobStatus {
+    public func open(id: String, name: String, size: Int64, lastModified: Int64?, site: String? = nil) throws -> JobStatus {
         guard Self.isValidID(id), size > 0, !name.isEmpty else { throw JobError("bad-request", "Upload-ID, Name oder Größe fehlt.") }
         if let r = records[id] {
-            guard r.status.name == name, r.status.size == size else {
+            guard r.site == site, r.status.name == name, r.status.size == size else {
                 throw JobError("file-mismatch", "Unter diesem Upload liegt eine andere Datei.")
             }
             return withMissing(r)
@@ -214,14 +218,14 @@ public actor ProResJobs {
         let t = now()
         let r = Record(status: JobStatus(uploadId: id, name: name, size: size, lastModified: lastModified,
                                          phase: .receiving, received: 0, fraction: 0, createdAt: t, updatedAt: t),
-                       ranges: ByteRanges(), sourceName: sourceName)
+                       ranges: ByteRanges(), sourceName: sourceName, site: site)
         try save(r)
         return withMissing(r)
     }
 
     /// One slice of the source. When the last byte arrives the job queues for its encode.
-    public func receive(id: String, range: Range<Int64>, total: Int64, data: Data) throws -> JobStatus {
-        var r = try record(id)
+    public func receive(id: String, range: Range<Int64>, total: Int64, data: Data, site: String? = nil) throws -> JobStatus {
+        var r = try record(id, site: site)
         guard total == r.status.size else { throw JobError("file-mismatch", "Die Größe passt nicht zum Upload.") }
         guard Int64(data.count) == range.count, data.count <= Self.maxSlice, range.upperBound <= total else {
             throw JobError("bad-request", "Der Abschnitt passt nicht.")
@@ -247,15 +251,15 @@ public actor ProResJobs {
         return withMissing(r)
     }
 
-    public func status(id: String) throws -> JobStatus { withMissing(try record(id)) }
+    public func status(id: String, site: String? = nil) throws -> JobStatus { withMissing(try record(id, site: site)) }
 
-    public func list() -> [JobStatus] {
-        records.values.map { withMissing($0) }.sorted { $0.createdAt < $1.createdAt }
+    public func list(site: String? = nil) -> [JobStatus] {
+        records.values.filter { $0.site == site }.map { withMissing($0) }.sorted { $0.createdAt < $1.createdAt }
     }
 
     /// Up to 64 MiB of the intermediate, and its whole size.
-    public func readIntermediate(id: String, range: Range<Int64>) throws -> (Data, Int64) {
-        let r = try record(id)
+    public func readIntermediate(id: String, range: Range<Int64>, site: String? = nil) throws -> (Data, Int64) {
+        let r = try record(id, site: site)
         guard r.status.phase == .ready, let info = r.status.intermediate else {
             throw JobError("not-ready", "Die Datei ist noch nicht fertig.")
         }
@@ -269,14 +273,18 @@ public actor ProResJobs {
         return (data, info.size)
     }
 
-    public func intermediatePath(id: String) throws -> URL {
-        _ = try record(id)
+    public func intermediatePath(id: String, site: String? = nil) throws -> URL {
+        _ = try record(id, site: site)
         return intermediateURL(id)
     }
 
     /// `finish` after the upload, `cancel` before: either way both files go.
-    public func delete(id: String) throws {
-        _ = try record(id)
+    public func delete(id: String, site: String? = nil) throws {
+        _ = try record(id, site: site)
+        remove(id)
+    }
+
+    private func remove(_ id: String) {
         if running?.id == id {
             running?.task.cancel()
             running = nil
@@ -293,7 +301,7 @@ public actor ProResJobs {
         let limit = now().addingTimeInterval(-Self.maxAge)
         let old = records.values.filter { $0.status.updatedAt < limit && $0.status.uploadId != running?.id }
             .map(\.status.uploadId)
-        for id in old { try? delete(id: id) }
+        for id in old { remove(id) }
         return old
     }
 

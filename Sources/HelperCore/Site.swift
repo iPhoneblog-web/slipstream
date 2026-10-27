@@ -19,7 +19,7 @@ public struct SiteConfig: Codable, Equatable, Sendable {
 
     /// The origin a page of the site has: `https://<host>`.
     public var origin: String { "https://\(host)" }
-    public var url: URL { URL(string: origin + "/")! }
+    public var url: URL? { URL(string: origin + "/") }
 
     /// The extension protocols this app speaks (docs/extension-protocol.md).
     public static let protocols: Set<Int> = [SlipstreamIDs.protocolVersion]
@@ -42,7 +42,9 @@ public struct SiteConfig: Codable, Equatable, Sendable {
     }
 
     /// What the user typed, as a host: a pasted URL loses its scheme and path; only letters,
-    /// digits, dots, hyphens and a port; at least one dot.
+    /// digits, dots, hyphens and a port of plain digits; at least one dot. The port is written as
+    /// a browser writes the origin: `:443` goes, `:08443` becomes `:8443`, so the stored origin
+    /// equals the one Safari reports for the page.
     public static func host(from input: String) throws -> String {
         var s = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let r = s.range(of: "://") { s = String(s[r.upperBound...]) }
@@ -53,15 +55,17 @@ public struct SiteConfig: Codable, Equatable, Sendable {
               name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") }) else {
             throw Problem.badHost
         }
-        if parts.count == 2 {
-            guard let port = Int(parts[1]), (1...65535).contains(port) else { throw Problem.badHost }
-        }
-        return s
+        guard parts.count == 2 else { return String(name) }
+        guard !parts[1].isEmpty, parts[1].count <= 5, parts[1].allSatisfy({ $0.isASCII && $0.isNumber }),
+              let port = Int(parts[1]), (1...65535).contains(port) else { throw Problem.badHost }
+        let host = port == 443 ? String(name) : "\(name):\(port)"
+        guard URL(string: "https://\(host)/") != nil else { throw Problem.badHost }
+        return host
     }
 
-    /// The well-known file's URL for a host.
-    public static func wellKnown(_ host: String) -> URL {
-        URL(string: "https://\(host)/.well-known/funkhaus.json")!
+    /// The well-known file's URL for a host from `host(from:)`; nil for anything that is none.
+    public static func wellKnown(_ host: String) -> URL? {
+        URL(string: "https://\(host)/.well-known/funkhaus.json")
     }
 
     /// Checks the answer of `/.well-known/funkhaus.json`:

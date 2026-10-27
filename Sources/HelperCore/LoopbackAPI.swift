@@ -79,7 +79,7 @@ public struct LoopbackAPI: Sendable {
         } else {
             seen?()
             do {
-                response = try await route(req)
+                response = try await route(req, site: site())
             } catch {
                 let e = JobError.from(error)
                 response = Self.problem(e, status: e.status)
@@ -113,7 +113,8 @@ public struct LoopbackAPI: Sendable {
         var `protocol` = SlipstreamIDs.protocolVersion
     }
 
-    private func route(_ req: HTTPRequest) async throws -> HTTPResponse {
+    /// `site` is the checked site; every job call is for that site's jobs only.
+    private func route(_ req: HTTPRequest, site: String?) async throws -> HTTPResponse {
         let s = req.segments
         guard s.first == "v1" else { return HTTPResponse(status: 404) }
         // `PUT jobs/:id/source`: the route with the id taken out.
@@ -133,21 +134,21 @@ public struct LoopbackAPI: Sendable {
             try await pairing.setTunnel(config)
             return HTTPResponse(status: 204)
         case "GET jobs":
-            return .json(["jobs": await jobs.list()])
+            return .json(["jobs": await jobs.list(site: site)])
         case "PUT jobs/:id":
             guard let body = try? JSONCoding.decoder.decode(OpenBody.self, from: req.body) else {
                 throw JobError("bad-request", "Name oder Größe fehlt.")
             }
-            return .json(try await jobs.open(id: id, name: body.name, size: body.size, lastModified: body.lastModified))
+            return .json(try await jobs.open(id: id, name: body.name, size: body.size, lastModified: body.lastModified, site: site))
         case "GET jobs/:id":
-            return .json(try await jobs.status(id: id))
+            return .json(try await jobs.status(id: id, site: site))
         case "PUT jobs/:id/source":
             guard let header = req.header("content-range"), let (range, total) = HTTPParser.contentRange(header) else {
                 throw JobError("bad-request", "Content-Range fehlt.")
             }
-            return .json(try await jobs.receive(id: id, range: range, total: total, data: req.body))
+            return .json(try await jobs.receive(id: id, range: range, total: total, data: req.body, site: site))
         case "GET jobs/:id/intermediate":
-            let status = try await jobs.status(id: id)
+            let status = try await jobs.status(id: id, site: site)
             guard status.phase == .ready, let info = status.intermediate else {
                 throw JobError("not-ready", "Die Datei ist noch nicht fertig.")
             }
@@ -159,13 +160,13 @@ public struct LoopbackAPI: Sendable {
             guard range.count <= ProResJobs.maxSlice else {
                 throw JobError("bad-request", "Höchstens 64 MiB auf einmal.")
             }
-            let (data, total) = try await jobs.readIntermediate(id: id, range: range)
+            let (data, total) = try await jobs.readIntermediate(id: id, range: range, site: site)
             let last = range.lowerBound + Int64(data.count) - 1
             return HTTPResponse(status: 206, headers: [("Content-Type", "video/mp4"),
                                                        ("Content-Range", "bytes \(range.lowerBound)-\(last)/\(total)")],
                                 body: data)
         case "DELETE jobs/:id":
-            try await jobs.delete(id: id)
+            try await jobs.delete(id: id, site: site)
             return HTTPResponse(status: 204)
         default:
             return HTTPResponse(status: 404)

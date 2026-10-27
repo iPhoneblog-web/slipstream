@@ -75,7 +75,8 @@ final class AppModel: ObservableObject {
         do { host = try SiteConfig.host(from: input) } catch {
             return (error as? SiteConfig.Problem)?.message ?? error.localizedDescription
         }
-        var request = URLRequest(url: SiteConfig.wellKnown(host), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        guard let wellKnown = SiteConfig.wellKnown(host) else { return SiteConfig.Problem.badHost.message }
+        var request = URLRequest(url: wellKnown, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let data: Data
         do {
@@ -104,7 +105,7 @@ final class AppModel: ObservableObject {
     }
 
     func openSite() {
-        if let site { NSWorkspace.shared.open(site.url) } else { showSetup() }
+        if let url = site?.url { NSWorkspace.shared.open(url) } else { showSetup() }
     }
 
     func showSettings() {

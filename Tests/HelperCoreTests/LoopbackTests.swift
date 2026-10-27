@@ -117,6 +117,31 @@ final class LoopbackTests: XCTestCase {
         XCTAssertEqual(ok.status, 200)
     }
 
+    /// The guard fires: after the site changes, the new site neither lists, reads, writes nor
+    /// deletes the old site's jobs; they stay for the old one.
+    func testJobsBelongToTheirSite() async throws {
+        let box = Box<String?>(LoopbackTests.site)
+        let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying)
+        try await jobs.load()
+        let a = LoopbackAPI(token: "t0ken", version: "1", name: "Mac", jobs: jobs, pairing: FakePairing(), site: { box.value })
+        _ = await call(a, "PUT", "/v1/jobs/old", body: Data(#"{"name":"a.mov","size":4}"#.utf8))
+        _ = await call(a, "PUT", "/v1/jobs/old/source", body: Data([1, 2, 3, 4]), headers: ["Content-Range": "bytes 0-3/4"])
+        _ = try await waitFor(a, "old", phase: "ready")
+
+        let other = "https://other.example.org"
+        box.value = other
+        let h = ["X-Slipstream-Site": other]
+        do { let r = await call(a, "GET", "/v1/jobs", headers: h); XCTAssertEqual(r.body, Data(#"{"jobs":[]}"#.utf8)) }
+        do { let r = await call(a, "GET", "/v1/jobs/old", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "GET", "/v1/jobs/old/intermediate", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "PUT", "/v1/jobs/old/source", body: Data([9]), headers: h.merging(["Content-Range": "bytes 0-0/4"]) { $1 }); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "DELETE", "/v1/jobs/old?reason=cancel", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "PUT", "/v1/jobs/old", body: Data(#"{"name":"a.mov","size":4}"#.utf8), headers: h); XCTAssertEqual(r.status, 409) }
+
+        box.value = LoopbackTests.site
+        do { let r = await call(a, "GET", "/v1/jobs/old/intermediate"); XCTAssertEqual(r.status, 206) }
+    }
+
     func testPreflightAllowsPrivateNetwork() async throws {
         let a = try await api()
         let r = await a.handle(HTTPRequest(method: "OPTIONS", path: "/v1/jobs/u1/source",

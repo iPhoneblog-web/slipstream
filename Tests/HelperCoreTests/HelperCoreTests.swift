@@ -174,11 +174,15 @@ final class SiteConfigTests: XCTestCase {
         XCTAssertEqual(try SiteConfig.host(from: "funkhaus.example.org"), "funkhaus.example.org")
         XCTAssertEqual(try SiteConfig.host(from: "  https://Funkhaus.Example.org/encoder?x=1 "), "funkhaus.example.org")
         XCTAssertEqual(try SiteConfig.host(from: "localhost.test:8443"), "localhost.test:8443")
+        // As the browser writes the origin: the default port goes, leading zeros too.
+        XCTAssertEqual(try SiteConfig.host(from: "https://funkhaus.example.org:443/"), "funkhaus.example.org")
+        XCTAssertEqual(try SiteConfig.host(from: "funkhaus.example.org:08443"), "funkhaus.example.org:8443")
     }
 
     /// The guard fires: no dot, odd characters, a bad port, empty.
     func testBadHosts() {
-        for bad in ["", "localhost", "funk haus.org", "a..b", ".a.b", "a.b.", "a.b:0", "a.b:x", "a.b:1:2", "ex@mple.org"] {
+        for bad in ["", "localhost", "funk haus.org", "a..b", ".a.b", "a.b.", "a.b:0", "a.b:x", "a.b:1:2", "ex@mple.org",
+                    "a.b:+443", "a.b:-1", "a.b:", "a.b:65536", "a.b:٤٤٣"] {
             XCTAssertThrowsError(try SiteConfig.host(from: bad), bad)
         }
     }
@@ -188,7 +192,7 @@ final class SiteConfigTests: XCTestCase {
         let site = try SiteConfig.check(host: "funkhaus.example.org", wellKnown: ok, appVersion: "1.1.0")
         XCTAssertEqual(site, SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1))
         XCTAssertEqual(site.origin, "https://funkhaus.example.org")
-        XCTAssertEqual(SiteConfig.wellKnown("a.b").absoluteString, "https://a.b/.well-known/funkhaus.json")
+        XCTAssertEqual(SiteConfig.wellKnown("a.b")?.absoluteString, "https://a.b/.well-known/funkhaus.json")
     }
 
     /// The guard fires: not JSON (a login page), another app, a protocol this app does not

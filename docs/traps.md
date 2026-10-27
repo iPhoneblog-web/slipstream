@@ -45,12 +45,17 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
 | the content script (`content.js`) | asks once per page whether it is the site; elsewhere it answers no `hello` or `launch` and puts no frame into the page | "silent on a foreign page, no bridge in it" |
 | the bridge (`bridge.js`) | web-accessible on every https page, so any page could frame it: it takes a port only from a parent on the site, and names that site to the loopback | "a parent elsewhere gets no port", "no site set up, no port" |
 | the loopback (`LoopbackAPI`) | the request's `Origin` must be an extension page, the token must match, and `X-Slipstream-Site` must be the configured site; before setup nothing passes | `LoopbackTests`: `testOnlyTheExtensionsOrigin`, `testOnlyTheConfiguredSite` |
+| the ProRes jobs (`ProResJobs`) | each job keeps the site that made it; after a site change the new site neither lists, reads, writes nor deletes the old one's | `testJobsBelongToTheirSite` |
 | the app extension (`SafariWebExtensionHandler`) | reads the site from the app group and checks it is a host before handing it on; before setup `presence` says `not-set-up` | the setup and the site file: `SiteConfigTests` |
 
 - **What Safari shows when the extension is turned on:** that it can read and change web pages
   on **all websites** ("alle Websites"), because of the `https://*/*` match. Safari still asks
   per site before a content script runs there; the user allows the Funkhaus site once. Other
   sites run the content script only if the user allows them too, and then it stays silent.
+- **The stored host is written as the browser writes the origin** (`SiteConfig.host`): `:443` goes,
+  `:08443` becomes `:8443`, and a port is plain ASCII digits (Swift's `Int("+443")` is 443, and
+  that host made no URL). Otherwise the extension would compare against an origin Safari never
+  reports.
 - **The site is checked before it is kept:** `https://<host>/.well-known/funkhaus.json` must answer
   `{"app": "funkhaus", "slipstream": {"protocol": 1, "min_version": …}}` with a protocol this
   version speaks and a minimum it meets (`SiteConfig.check`). A login page or another app
