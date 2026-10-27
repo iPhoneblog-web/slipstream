@@ -20,24 +20,22 @@ release; the user installs it by hand.
 Three jobs, so that nothing runs beside a secret it does not need:
 
 1. **test**: `swift test`, no secret.
-2. **build**, twice: the release, and on anything but a tag the check build (`--check`, the
-   extension's frame self-test for the wp-admin check; [traps.md](traps.md), "Checks"). It runs
-   `bin/fetch-worker` (the worker and its tools from encode-queue's release,
-   [worker.md](worker.md), [tools.md](tools.md)) before any secret is on the runner, then
-   imports the Developer ID identity into a temporary keychain and writes the notary key to a
-   file, and `bin/package --no-test`: `xcodegen`, `xcodebuild`, the helpers into
-   `Contents/Helpers`, signing inside out (each helper, the extension with its sandbox
-   entitlements, the app) with the hardened runtime and a secure timestamp, notarising and
-   stapling the app, the DMG signed, notarised and stapled. The keychain and the key go before
-   the checks: `codesign --verify --strict`, `spctl -a -vv`, `stapler validate`. Read access
-   only.
+2. **build**: `bin/fetch-worker` (the worker and its tools from encode-queue's release, pinned
+   by tag and sha256; [worker.md](worker.md), [tools.md](tools.md)) before any secret is on the
+   runner, then the Developer ID identity into a temporary keychain and the notary key into a
+   file, and `bin/package --no-test` with `REQUIRE_WORKER=1`: `xcodegen`, `xcodebuild`, the
+   helpers into `Contents/Helpers` (the log line `embedded: encode-worker …` shows which),
+   signing inside out (each helper, the extension with its sandbox entitlements, the app) with
+   the hardened runtime and a secure timestamp, notarising and stapling the app, the DMG
+   signed, notarised and stapled. The keychain and the key go before the checks:
+   `codesign --verify --strict`, `spctl -a -vv`, `stapler validate`. Read access only.
 3. **publish**, on a tag only: the only job that may write; it publishes the release build's
    files and runs no code of this repository.
 
 Actions are pinned by commit. A pull request from a fork gets no secrets and builds ad hoc.
 Locally `bin/package` signs ad hoc too; give `SIGN_IDENTITY`, `NOTARY_KEY`, `NOTARY_KEY_ID`,
 `NOTARY_ISSUER` to sign and notarise. `bin/package` fails when a signed bundle lacks its
-entitlements, its extension point or its version, or when a release carries the self-test.
+entitlements, its extension point or its version.
 
 ## The secrets
 

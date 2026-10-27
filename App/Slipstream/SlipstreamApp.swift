@@ -195,9 +195,9 @@ enum About {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
-    /// `Contents/Helpers/versions.txt`, from the toolchain of encode-queue (bin/fetch-worker).
+    /// `Contents/Resources/versions.txt`, from the toolchain of encode-queue (bin/fetch-worker).
     static func bundledTools() -> [String] {
-        guard let text = try? String(contentsOf: Paths.helper("versions.txt"), encoding: .utf8) else {
+        guard let text = Paths.toolVersions else {
             return ["Ohne Worker und Werkzeuge"]
         }
         return text.split(separator: "\n").map(String.init)

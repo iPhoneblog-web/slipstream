@@ -151,7 +151,7 @@ answers only an `Origin` of `safari-web-extension://…`, and answers a prefligh
 
 - **Its CSP lets the bridge in:** `frame-src 'self' safari-web-extension:`. Without a
   `frame-src` the page's `default-src 'self'` applies to frames, and Safari may apply it to an
-  extension's frame too; the check with the signed extension settles it, and this line then
-  says what it found.
+  extension's frame too. The first real run of v1.0.0 settles it ([traps.md](traps.md),
+  "Checks"), and this line then says what it found.
 - Nothing else: the page never connects to `127.0.0.1`, so `connect-src` stays `'self'`. The
   `Blob` from `job.read` goes into the page's own tus upload as any `Blob`.

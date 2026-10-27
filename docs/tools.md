@@ -5,13 +5,15 @@ The queue offers a worker a job only when its tools match `encoder`'s exactly, a
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue) for Linux and for macOS arm64
 (Thorsten's decision, 2026-10-26), and Slipstream embeds the macOS build of its release:
 `bin/fetch-worker` downloads it beside the worker, checks it against the release's
-`SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe`, `whisper-cli` and `versions.txt`
-into `Contents/Helpers`. This repository builds no tool of its own.
+`SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe` and `whisper-cli` into
+`Contents/Helpers`, and `versions.txt` into `Contents/Resources`. This repository builds no tool of its own.
 
 The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `whisper-cli`
 and `versions.txt`, static, whisper.cpp with Metal. Its versions are encode-queue's, the same on
-`encoder`'s worker image and on the Mac (at `v0.1.0`: ffmpeg 9.0.2, x265 4.2, x264 r3222,
-whisper.cpp v1.9.5); `versions.txt` names them, and About shows it. The Mac toolchain has no
+`encoder`'s worker image and on the Mac (`v0.1.0`, toolchain 1: ffmpeg 9.0.2, libx265 4.3,
+libx264 core 165 r3222, libvmaf 3.2.1, whisper.cpp v1.9.5); `versions.txt` names them, and About
+shows it. `bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to
+those lines. The Mac toolchain has no
 libass, so a Mac announces no fonts and gets no jobs with burnt-in captions.
 
 - **When encode-queue's toolchain changes**, a new Slipstream embeds it. Until then the queue
