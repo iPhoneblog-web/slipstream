@@ -284,7 +284,19 @@ final class AppModel: ObservableObject {
 
     // MARK: - The worker
 
+    /// Why the worker is not running, for the menu ("Encoder gestoppt: …"); nil while it runs
+    /// and has said something since it started.
+    @Published private(set) var workerStopped: String?
+    /// When the app starts it again (WorkerRestart).
+    @Published private(set) var workerNextStart: Date?
+    private var workerStops = 0
+    private var workerStartedAt: Date?
+    private var pendingStart: DispatchWorkItem?
+
     private func startWorker() {
+        pendingStart?.cancel()
+        pendingStart = nil
+        workerNextStart = nil
         // One worker per key: two workers on one WireGuard key fight over the tunnel.
         guard worker == nil, !quitting else { return }
         guard AppPairing.storedTunnel() != nil else { connection = .notPaired; return }
@@ -297,19 +309,44 @@ final class AppModel: ObservableObject {
                     guard let self, self.worker?.id == box.id else { return }
                     self.handle(event)
                 }
-            }, onExit: { status in
-                Task { @MainActor [weak self] in self?.workerExited(id: box.id, status) }
+            }, onExit: { reason in
+                Task { @MainActor [weak self] in self?.workerExited(id: box.id, reason) }
             })
             box.id = worker.id
             try worker.start(key: key, limits: limits, version: version)
             self.worker = worker
+            workerStartedAt = Date()
             connection = .down
+            note("worker started, pid \(worker.pid)")
             if let until = pausedUntil { worker.send(.pause(until: until)) }
         } catch {
-            log.error("worker: \(error.localizedDescription, privacy: .public)")
-            problem = "Der Worker startet nicht: \(error.localizedDescription)"
             connection = .down
+            stopped("Der Worker startet nicht: \(error.localizedDescription)", ranFor: 0)
         }
+    }
+
+    /// A line about the worker's life: the unified log (kept), the log file and the log window.
+    private func note(_ line: String) {
+        log.notice("\(line, privacy: .public)")
+        WorkerLog.write("slipstream: " + line)
+        appendLog("slipstream: " + line)
+    }
+
+    /// The worker is gone or did not start: say why in the menu and start it again later,
+    /// sooner after a worker that had run for a while (WorkerRestart).
+    private func stopped(_ reason: String, ranFor seconds: TimeInterval) {
+        workerStops = WorkerRestart.stops(previous: workerStops, ranFor: seconds)
+        let delay = WorkerRestart.delay(afterStops: workerStops)
+        workerStopped = reason
+        workerNextStart = Date().addingTimeInterval(delay)
+        note("worker stopped after \(Int(seconds)) s: \(reason); stop \(workerStops) in a row, next start in \(Int(delay)) s")
+        pendingStart?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.worker == nil, !self.quitting else { return }
+            self.startWorker()
+        }
+        pendingStart = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     private var restarting: Task<Void, Never>?
@@ -324,25 +361,26 @@ final class AppModel: ObservableObject {
             let old = self.worker
             self.worker = nil
             await old?.quit(timeout: 10)
+            // A new pairing is a new start: no backoff from earlier stops.
+            self.workerStops = 0
             self.startWorker()
         }
     }
 
-    private func workerExited(id: UUID?, _ status: Int32) {
+    private func workerExited(id: UUID?, _ reason: String) {
         guard let current = worker, current.id == id, !current.isRunning else { return }
-        log.error("worker exited with \(status)")
+        log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
         queueJob = nil
         connection = .down
         keepAwake(false)
-        // Start it again a little later, unless the app is quitting.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self, self.worker == nil, !self.quitting else { return }
-            self.startWorker()
-        }
+        guard !quitting else { return }
+        stopped(reason, ranFor: workerStartedAt.map { Date().timeIntervalSince($0) } ?? 0)
     }
 
     private func handle(_ event: WorkerEvent) {
+        // A worker that speaks runs: the menu stops saying why the last one stopped.
+        if workerStopped != nil, !isLogLine(event) { workerStopped = nil }
         switch event {
         case .connection(let up, let lastAnswerAt, let refused):
             connection = up ? .up : .down
@@ -354,7 +392,9 @@ final class AppModel: ObservableObject {
         case .idle:
             queueJob = nil
             keepAwake(proresJob != nil)
-        case .log(_, let line):
+        case .log(let lease, let line):
+            // Standard error is in the file already (WorkerProcess); a job's lines come here.
+            if let lease { WorkerLog.write("\(lease): \(line)") }
             appendLog(line)
         case .result(let title, let verdict, let check):
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
@@ -430,6 +470,11 @@ final class AppModel: ObservableObject {
             defaults.set(Date(), forKey: "todayDate")
             defaults.set(finishedToday, forKey: "todayCount")
         }
+    }
+
+    private func isLogLine(_ e: WorkerEvent) -> Bool {
+        if case .log = e { return true }
+        return false
     }
 
     private func appendLog(_ line: String) {

@@ -524,6 +524,21 @@ struct LogView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
+        VStack(spacing: 0) {
+            lines
+            Divider()
+            // The same lines, and older ones, as a file to send with a bug report.
+            HStack {
+                Text(WorkerLog.url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                    .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                Spacer()
+                Button("Im Finder zeigen") { NSWorkspace.shared.activateFileViewerSelecting([WorkerLog.url]) }
+            }
+            .padding(8)
+        }
+    }
+
+    private var lines: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {

@@ -314,3 +314,47 @@ final class ConnectLinkTests: XCTestCase {
         }
     }
 }
+
+final class WorkerHealthTests: XCTestCase {
+    func testBackoff() {
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 1), 10)
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 2), 20)
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 4), 80)
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 7), 600)
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 100), 600)
+        XCTAssertEqual(WorkerRestart.delay(afterStops: 0), 10)
+        // A worker that died within 5 min counts on; one that ran longer starts anew.
+        XCTAssertEqual(WorkerRestart.stops(previous: 3, ranFor: 12), 4)
+        XCTAssertEqual(WorkerRestart.stops(previous: 3, ranFor: 301), 1)
+    }
+
+    func testReason() {
+        XCTAssertEqual(WorkerExit.reason(status: 1, signal: nil, lastLines: ["level=WARN msg=x", "encode-worker: the tunnel: no route"]),
+                       "encode-worker: the tunnel: no route (Status 1)")
+        // A Go panic: the panic line, not the last goroutine line.
+        XCTAssertEqual(WorkerExit.reason(status: 2, signal: nil, lastLines: ["panic: runtime error: index out of range [3]", "", "goroutine 7 [running]:", "main.go:12 +0x1c"]),
+                       "panic: runtime error: index out of range [3] (Status 2)")
+        XCTAssertEqual(WorkerExit.reason(status: 0, signal: SIGKILL, lastLines: []), "Signal 9 (SIGKILL)")
+        XCTAssertEqual(WorkerExit.reason(status: 0, signal: nil, lastLines: ["  ", "last words"]), "last words (Status 0)")
+        let long = String(repeating: "x", count: 300)
+        XCTAssertEqual(WorkerExit.reason(status: 1, signal: nil, lastLines: [long]).count, 160 + " (Status 1)".count)
+    }
+
+    func testRotatingLog() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("Logs/worker.log")
+        let log = RotatingLog(url: url, limit: 200)
+        let t = Date(timeIntervalSince1970: 0)
+        log.write("first", at: t)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "1970-01-01T00:00:00.000Z first\n")
+        for i in 0..<10 { log.write("line \(i) of some length", at: t) }
+        let old = url.appendingPathExtension("1")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertLessThanOrEqual(try Data(contentsOf: url).count, 200)
+        XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).hasSuffix("line 9 of some length\n"))
+        // A new log on the same file appends.
+        RotatingLog(url: url, limit: 200).write("again", at: t)
+        XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).hasSuffix("again\n"))
+    }
+}

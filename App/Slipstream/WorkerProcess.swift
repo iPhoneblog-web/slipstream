@@ -2,6 +2,21 @@ import Foundation
 import HelperCore
 import os
 
+/// The worker's log file, `~/Library/Logs/Slipstream/worker.log` (rotated at 5 MB): its standard
+/// error and the app's lines about starting and stopping it. Up to 1.3.1 these lines lived only
+/// in the log window and in the unified log at info level, which macOS does not keep; a worker
+/// that died left no trace (docs/worker.md, "When the worker stops").
+enum WorkerLog {
+    static let url = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Logs/Slipstream/worker.log")
+    private static let queue = DispatchQueue(label: "io.github.kyrios.slipstream.worker-log", qos: .utility)
+    nonisolated(unsafe) private static let file = RotatingLog(url: url)
+
+    static func write(_ line: String) {
+        queue.async { file.write(line) }
+    }
+}
+
 /// The embedded worker, `Contents/Helpers/encode-worker` (docs/worker.md): started with the
 /// private key on its standard input, commands after it, events back on its standard output.
 /// It runs at `nice 19`, and so do the ffmpeg and whisper.cpp it starts.
@@ -19,15 +34,21 @@ final class WorkerProcess: @unchecked Sendable {
     private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "worker")
     private let lock = NSLock()
     private var lines = LineBuffer()
+    private var errorLines = LineBuffer()
+    /// Its last lines on standard error, for the reason it stopped (WorkerExit).
+    private var tail: [String] = []
 
     let id = UUID()
     let onEvent: @Sendable (WorkerEvent) -> Void
-    let onExit: @Sendable (Int32) -> Void
+    /// Why it stopped, one line (WorkerExit.reason).
+    let onExit: @Sendable (String) -> Void
 
-    init(onEvent: @escaping @Sendable (WorkerEvent) -> Void, onExit: @escaping @Sendable (Int32) -> Void) {
+    init(onEvent: @escaping @Sendable (WorkerEvent) -> Void, onExit: @escaping @Sendable (String) -> Void) {
         self.onEvent = onEvent
         self.onExit = onExit
     }
+
+    var pid: Int32 { process.processIdentifier }
 
     /// Whether the embedded worker takes a flag, read once from its usage.
     static func takes(_ flag: String) -> Bool { usage.map { WorkerFlags.supports(flag, usage: $0) } ?? false }
@@ -87,18 +108,41 @@ final class WorkerProcess: @unchecked Sendable {
                 if let event = WorkerEvent.parse(line) { self.onEvent(event) }
             }
         }
+        // Standard error is the log for people: the log window, the unified log, and
+        // ~/Library/Logs/Slipstream/worker.log, which outlives the app (WorkerLog).
+        let stderrDone = DispatchSemaphore(value: 0)
         errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard let self, !data.isEmpty else { return }
-            for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            guard let self else { return }
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                stderrDone.signal()
+                return
+            }
+            let new = self.lock.withLock {
+                let new = self.errorLines.append(data)
+                self.tail = Array((self.tail + new).suffix(40))
+                return new
+            }
+            for line in new {
                 self.log.info("\(line, privacy: .public)")
-                self.onEvent(.log(leaseId: nil, line: String(line)))
+                WorkerLog.write(line)
+                self.onEvent(.log(leaseId: nil, line: line))
             }
         }
         process.terminationHandler = { [weak self] p in
-            self?.output.fileHandleForReading.readabilityHandler = nil
-            self?.errors.fileHandleForReading.readabilityHandler = nil
-            self?.onExit(p.terminationStatus)
+            let signal = p.terminationReason == .uncaughtSignal ? p.terminationStatus : nil
+            let status = p.terminationStatus
+            // Its last words first: a Go panic writes them just before the end. At most 2 s,
+            // in case a tool it started still holds standard error open.
+            DispatchQueue.global(qos: .utility).async {
+                _ = stderrDone.wait(timeout: .now() + 2)
+                guard let self else { return }
+                self.output.fileHandleForReading.readabilityHandler = nil
+                self.errors.fileHandleForReading.readabilityHandler = nil
+                let tail = self.lock.withLock { self.tail }
+                self.onExit(WorkerExit.reason(status: status, signal: signal, lastLines: tail))
+            }
         }
         try process.run()
         write(key.privateBase64 + "\n")
