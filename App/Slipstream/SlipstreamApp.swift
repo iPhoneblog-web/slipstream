@@ -158,7 +158,7 @@ struct MenuContent: View {
             Text("Safari-Extension: verbunden, zuletzt \(seen.formatted(date: .omitted, time: .shortened))")
         } else {
             Text("Safari-Extension: noch nicht verbunden")
-            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, funkhaus.iphoneblog.de)")
+            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, upload.iphoneblog.de und funkhaus.iphoneblog.de)")
         }
         ForEach(model.refused, id: \.kind) { r in
             Text("Keine \(r.kind)-Aufträge: \(r.reason)")

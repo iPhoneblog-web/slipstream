@@ -28,7 +28,7 @@ Für Alex, oder wer sonst ProRes ins Funkhaus zieht. Einmal pro Mac, etwa fünf 
    kleines Wind-Icon oben rechts in der Menüleiste.
 3. **Die Safari-Extension einschalten:** Safari → **Einstellungen …** → **Erweiterungen**, bei
    **Slipstream** den Haken setzen. Safari fragt nach der Berechtigung für
-   `funkhaus.iphoneblog.de` (und, falls gefragt, `upload.iphoneblog.de`): **Immer erlauben** (oder
+   `upload.iphoneblog.de` und `funkhaus.iphoneblog.de`: **Immer erlauben** (oder
    „Auf dieser Website immer erlauben“).
 4. **Testen:** das Funkhaus in Safari öffnen (bzw. die Seite neu laden, falls sie schon
    offen war) und eine kurze ProRes-Datei hineinziehen. Statt der Meldung „ProRes wird hier
