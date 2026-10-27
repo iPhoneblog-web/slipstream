@@ -168,7 +168,7 @@ final class AppModel: ObservableObject {
                 Task { @MainActor [weak self] in self?.workerExited(id: box.id, status) }
             })
             box.id = worker.id
-            try worker.start(key: key, limits: limits, version: version)
+            try worker.start(key: key, limits: limits)
             self.worker = worker
             connection = .down
             if let until = pausedUntil { worker.send(.pause(until: until)) }
