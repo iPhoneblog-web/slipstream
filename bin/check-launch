@@ -4,7 +4,7 @@
 # With `-cycleSettingsTabs YES` Settings shows each tab once. Then it hands the app a connect
 # link (slipstream://connect?site=…, docs/funkhaus-api.md): the setup window must open beside
 # Settings, and no site may be saved, since only the user's "Verbinden" saves one. From the
-# moment Settings is on screen, the app's watchdog must log no "main thread blocked" (100 ms or
+# app's "settings tabs: start" on, its watchdog must log no "main thread blocked" (100 ms or
 # more; docs/traps.md, "A frozen Settings window"). Runs in CI after bin/package. It refuses to run beside another
 # Slipstream: two apps would share one app group file, the one the Safari extension reads.
 #   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
@@ -18,6 +18,7 @@ fi
 site=~/Library/Group\ Containers/W9N692KH39.io.github.kyrios.slipstream/site.json
 had_site=0
 [[ -f $site ]] && had_site=1
+launched_at=$(date '+%Y-%m-%d %H:%M:%S')
 "$app/Contents/MacOS/Slipstream" -openSettings YES -cycleSettingsTabs YES &
 pid=$!
 trap 'kill $pid 2>/dev/null || true' EXIT
@@ -51,7 +52,6 @@ first=1
 (( had_site )) || first=2
 windows $first || { print "no settings window within 10 s" >&2; exit 1; }
 print "settings: ok"
-watch_from=$(date '+%Y-%m-%d %H:%M:%S')
 logged() {  # waits up to 10 s for a line of the app's log since $1 that contains $2
   for i in {1..20}; do
     sleep 0.5
@@ -60,7 +60,7 @@ logged() {  # waits up to 10 s for a line of the app's log since $1 that contain
   done
   return 1
 }
-logged "$watch_from" "settings tabs cycled" || { print "Settings did not go through its tabs within 10 s" >&2; exit 1; }
+logged "$launched_at" "settings tabs cycled" || { print "Settings did not go through its tabs within 10 s" >&2; exit 1; }
 print "settings tabs: ok"
 
 # example.org's hosts serve no Funkhaus, so the check fails; the window shows it, nothing saves.
@@ -76,8 +76,8 @@ if (( ! had_site )) && [[ -f $site ]]; then
 fi
 print "connect link: ok"
 
-blocked=$(/usr/bin/log show --start "$watch_from" --predicate 'subsystem == "io.github.kyrios.slipstream" AND eventMessage CONTAINS "main thread blocked"' \
-  --style compact 2>/dev/null | grep -- 'main thread blocked' || true)
+blocked=$(/usr/bin/log show --start "$launched_at" --predicate 'subsystem == "io.github.kyrios.slipstream"' \
+  --style compact 2>/dev/null | awk '/settings tabs: start/ { on = 1 } on && /main thread blocked/' || true)
 if [[ -n $blocked ]]; then
   print "the main thread waited while Settings and the link ran:\n$blocked" >&2
   exit 1

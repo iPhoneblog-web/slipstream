@@ -49,6 +49,7 @@ every message carrying `slipstream: 1`:
 | `hello` | the page | whether the extension and the app run; with the app running, a `MessagePort` to the bridge |
 | `launch` | the page | the app started (or not) in the background, without a prompt; then say `hello` again |
 | `ready` | the extension, unasked (Slipstream 1.2.0 on) | none; a page without a port says `hello` again |
+| `connect` | the page, when `hello` said `other-site` or `not-set-up` (Slipstream 1.3.1 on) | Slipstream asks the user to switch to this site; `ok: true` once the question is open |
 
 Everything else goes over the `MessagePort`: the Mac's identity for pairing and the tunnel
 configuration back, and one ProRes job per upload (the file in, the progress, the intermediate
@@ -59,6 +60,9 @@ back in Range slices, finish or cancel). The fields, the answers and the error c
 
 - wait about 3 s for the first `hello` answer, say `hello` again on `ready` and when its tab
   becomes visible, and treat no answer as "Slipstream missing, off, or not allowed on this site";
+- show "Slipstream ist für ein anderes Funkhaus eingerichtet – hier verbinden?" when `hello`
+  says `helper.reason: "other-site"` (Slipstream 1.3.1 on), and send `connect` on the user's
+  click; the well-known file (section 1) is what makes the extension answer at all there;
 - show the three states it can tell apart (no extension, extension without the app, both), and
   offer "Slipstream starten" (`launch`) for the second;
 - allow the extension's frame in its CSP: `frame-src 'self' safari-web-extension:`. The page

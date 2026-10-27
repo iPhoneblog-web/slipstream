@@ -5,8 +5,9 @@ import SafariServices
 /// Safari's native messaging lands here, in the app extension, not in the app. It answers the
 /// presence check (docs/extension-protocol.md, section 3): is Slipstream running, and on which
 /// port and with which token does its loopback endpoint listen. The app writes that into the app
-/// group at every start; the extension reads it and checks the process is alive. And it starts
-/// the app on the page's request (`launch`, section 1).
+/// group at every start; the extension reads it and checks the process is alive. It starts the
+/// app on the page's request (`launch`, section 1), and opens the app's connect link for a
+/// Funkhaus page elsewhere (`connect`): the app asks the user before it switches.
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     /// SlipstreamIDs in HelperCore; repeated here so the extension links no package.
     static let appGroup = "W9N692KH39.io.github.kyrios.slipstream"
@@ -44,6 +45,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             Self.launch(reply)
         case "site":
             reply(["site": Self.site() ?? NSNull()])
+        case "connect":
+            Self.connect(message?["site"] as? String, reply)
         default:
             reply(["error": "unknown message"])
         }
@@ -80,6 +83,30 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 }
             }
             wait()
+        }
+    }
+
+    /// `slipstream://connect?site=<host>`, opened in the app (started if need be). The host is the
+    /// page's own, from the background; the app parses the link strictly and asks first.
+    static func connect(_ site: String?, _ reply: @escaping ([String: Any]) -> Void) {
+        guard let site, !site.isEmpty, site.count <= 260,
+              site.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == ":") }) else {
+            reply(["opened": false])
+            return
+        }
+        var link = URLComponents()
+        link.scheme = "slipstream"
+        link.host = "connect"
+        link.queryItems = [URLQueryItem(name: "site", value: site)]
+        guard let url = link.url else {
+            reply(["opened": false])
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.addsToRecentItems = false
+        NSWorkspace.shared.open([url], withApplicationAt: containingApp, configuration: configuration) { _, error in
+            reply(["opened": error == nil])
         }
     }
 

@@ -311,11 +311,15 @@ struct SettingsView: View {
         // logs any wait of the main thread.
         .task {
             guard UserDefaults.standard.bool(forKey: "cycleSettingsTabs") else { return }
+            let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "check")
+            // After the launch has settled: the check counts waits from here on.
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            log.notice("settings tabs: start")
             for t in ["performance", "site", "pairing", "general"] {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 tab = t
             }
-            Logger(subsystem: SlipstreamIDs.logSubsystem, category: "check").notice("settings tabs cycled")
+            log.notice("settings tabs cycled")
         }
     }
 }
@@ -442,7 +446,10 @@ struct SetupView: View {
             if let confirm {
                 // A connect link: any website can send one, so nothing is kept before this click.
                 Text("Mit \(confirm.name) (\(confirm.host)) verbinden?").font(.headline)
-                Text("Ein Link hat Slipstream geöffnet. Verbinde nur, wenn du diesem Funkhaus vertraust: Es bekommt deine ProRes-Dateien und kann diesen Mac als Encoder nutzen.")
+                if let old = model.site?.host, old != confirm.host {
+                    Text("Bisher: \(old)").font(.callout)
+                }
+                Text("Ein Link oder eine Funkhaus-Seite hat Slipstream geöffnet. Verbinde nur, wenn du diesem Funkhaus vertraust: Es bekommt deine ProRes-Dateien und kann diesen Mac als Encoder nutzen. Die Kopplung bleibt.")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {

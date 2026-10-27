@@ -42,8 +42,15 @@ function page(origin, { frameLoads = true } = {}) {
 
 class FakeChannel { constructor() { this.port1 = { side: 1 }; this.port2 = { side: 2 }; } }
 
-function runContent(origin, background, options) {
+// wellKnown: what the page's own /.well-known/funkhaus.json answers (an object, or null for 404).
+function runContent(origin, background, options = {}) {
   const p = page(origin, options);
+  p.fetched = [];
+  const fetch = async (url, init) => {
+    p.fetched.push({ url, init });
+    const body = options.wellKnown;
+    return body ? { ok: true, json: async () => body } : { ok: false, json: async () => null };
+  };
   const browser = {
     runtime: {
       getManifest: () => ({ version: "1.1.0" }),
@@ -52,20 +59,22 @@ function runContent(origin, background, options) {
     },
   };
   vm.runInNewContext(source("content.js"), {
-    browser, window: p.win, document: p.document, location: p.win.location, MessageChannel: FakeChannel, URL,
+    browser, window: p.win, document: p.document, location: p.win.location, MessageChannel: FakeChannel, URL, fetch,
   });
   return p;
 }
 
 // The real background.js with a fake native side: the app is set up for SITE and running.
-function runBackground(nativeSite = SITE) {
+function runBackground(nativeSite = SITE, nativeLog = []) {
   let listener;
   const browser = {
     runtime: {
       getURL: (x) => `${EXT}/${x}`,
       onMessage: { addListener: (f) => { listener = f; } },
       sendNativeMessage: async (_app, msg) => {
+        nativeLog.push(msg);
         if (msg.type === "site") return { site: nativeSite };
+        if (msg.type === "connect") return { opened: true };
         if (msg.type === "presence") return { present: true, port: 51760, token: "t0ken", version: "1.1.0", name: "Mac" };
         if (msg.type === "launch") return { present: true, launched: true, version: "1.1.0", name: "Mac" };
         return null;
@@ -182,4 +191,86 @@ test("bridge: no site set up, no port", async () => {
   const b = runBridge(null);
   const port = await b.offer(SITE);
   assert.equal(port.onmessage, undefined);
+});
+
+// 1.3.1: a Funkhaus page that is not the configured site.
+const OTHER = "https://neu.example.org";
+const FUNKHAUS = { app: "funkhaus", name: "Neu", slipstream: { protocol: 1 } };
+
+test("content script: a page that never says hello causes no request", async () => {
+  const p = runContent(OTHER, runBackground(), { wellKnown: FUNKHAUS });
+  await tick();
+  assert.equal(p.fetched.length, 0);
+  assert.equal(p.posted.length, 0);
+});
+
+test("content script: no answer on a page without a valid funkhaus.json", async () => {
+  for (const wellKnown of [null, { app: "other", slipstream: { protocol: 1 } }, { app: "funkhaus", slipstream: { protocol: 9 } }, { app: "funkhaus" }]) {
+    const p = runContent(OTHER, runBackground(), { wellKnown });
+    await p.send({ slipstream: 1, type: "hello", id: "h1" });
+    await p.send({ slipstream: 1, type: "connect", id: "c1" });
+    await tick();
+    assert.equal(p.posted.length, 0, JSON.stringify(wellKnown));
+    assert.equal(p.frames.length, 0);
+  }
+});
+
+test("content script: a proven Funkhaus elsewhere hears other-site, no port, no bridge, no host", async () => {
+  const p = runContent(OTHER, runBackground(), { wellKnown: FUNKHAUS });
+  await p.send({ slipstream: 1, type: "hello", id: "h1" });
+  await tick();
+  assert.equal(p.fetched.length, 1);
+  assert.equal(p.fetched[0].url, `${OTHER}/.well-known/funkhaus.json`);
+  assert.equal(p.fetched[0].init.credentials, "omit");
+  assert.equal(p.fetched[0].init.redirect, "error");
+  const hello = p.posted.filter((m) => m.data.type === "hello");
+  assert.equal(hello.length, 1);
+  assert.deepEqual(plain(hello[0].data.helper), { present: false, reason: "other-site" });
+  assert.equal(hello[0].ports, undefined);
+  assert.equal(hello[0].target, OTHER);
+  assert.equal(p.frames.length, 0);
+  assert.equal(p.posted.filter((m) => m.data.type === "ready").length, 0);
+  assert.ok(!JSON.stringify(plain(p.posted.map((m) => m.data))).includes("funkhaus.example.org"));
+  // launch stays the configured site's.
+  await p.send({ slipstream: 1, type: "launch", id: "l1" });
+  await tick();
+  assert.equal(p.posted.filter((m) => m.data.type === "launch").length, 0);
+});
+
+test("content script: a proven Funkhaus before any setup hears not-set-up", async () => {
+  const p = runContent(OTHER, runBackground(null), { wellKnown: FUNKHAUS });
+  await p.send({ slipstream: 1, type: "hello", id: "h1" });
+  await tick();
+  assert.equal(plain(p.posted[0].data.helper).reason, "not-set-up");
+});
+
+test("connect: the app opens the link for the page's own host, and only for a proven Funkhaus", async () => {
+  const log = [];
+  const p = runContent(OTHER, runBackground(SITE, log), { wellKnown: FUNKHAUS });
+  await p.send({ slipstream: 1, type: "connect", id: "c1", site: "evil.example" });
+  await tick();
+  const connects = log.filter((m) => m.type === "connect");
+  assert.equal(connects.length, 1);
+  assert.equal(connects[0].site, "neu.example.org");
+  const answer = p.posted.filter((m) => m.data.type === "connect");
+  assert.equal(answer[0].data.re, "c1");
+  assert.equal(answer[0].data.ok, true);
+
+  const log2 = [];
+  const q = runContent("https://evil.example", runBackground(SITE, log2), { wellKnown: null });
+  await q.send({ slipstream: 1, type: "connect", id: "c1" });
+  await tick();
+  assert.equal(log2.filter((m) => m.type === "connect").length, 0);
+  assert.equal(q.posted.length, 0);
+});
+
+test("background: connect names the sender's host, never for the configured site or plain http", async () => {
+  const log = [];
+  const bg = runBackground(SITE, log);
+  assert.deepEqual(plain(await bg({ type: "connect", site: "evil.example" }, { url: `${OTHER}/upload` })), { opened: true });
+  assert.equal(log.filter((m) => m.type === "connect")[0].site, "neu.example.org");
+  assert.equal(await bg({ type: "connect" }, { url: `${SITE}/upload` }), null);
+  assert.equal(await bg({ type: "connect" }, { url: "http://neu.example.org/" }), null);
+  // setup says only yes or no.
+  assert.deepEqual(plain(await bg({ type: "setup" }, { url: `${OTHER}/` })), { configured: true });
 });

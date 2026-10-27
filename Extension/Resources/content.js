@@ -1,7 +1,9 @@
 // Runs on every https page, in every frame, from document_start, because the site is the user's
-// choice, not the manifest's. It answers only on the Funkhaus Slipstream is set up for; on every
-// other page it stays silent, puts nothing into the page and answers nothing (docs/traps.md,
-// "Origins"). There it answers the page's hello (docs/extension-protocol.md, section 1) and, with
+// choice, not the manifest's. It works only for the Funkhaus Slipstream is set up for; on every
+// other page it puts nothing into the page (docs/traps.md, "Origins"). One exception (1.3.1): a
+// page that says hello and proves to be a Funkhaus, by its own /.well-known/funkhaus.json, hears
+// that Slipstream is set up elsewhere (or not yet), never where, and may ask to connect; it gets
+// no port and no bridge. Any other page gets no answer and no request. On the site it answers the page's hello (docs/extension-protocol.md, section 1) and, with
 // Slipstream running, puts the bridge into the page and hands the page one end of a
 // MessageChannel, the bridge the other.
 //
@@ -11,12 +13,23 @@
 // channel until then). On the site it also says `ready`, so a page that gave up says hello again.
 (() => {
   const VERSION = browser.runtime.getManifest().version;
+  const PROTOCOLS = [1];
   const BRIDGE = browser.runtime.getURL("bridge.html");
   const BRIDGE_ORIGIN = new URL(BRIDGE).origin;
 
-  // Is this the configured site? Asked once per page; every message waits for the answer.
-  const mine = browser.runtime.sendMessage({ type: "site" })
-    .then((r) => !!(r && r.match), () => false);
+  // Is this the configured site? Asked at once; every message waits for the answer. Asked again
+  // when a page message finds it older than 2 s and it was no, so a page that just connected
+  // (section 1, "connect") is the site at its next hello.
+  const askSite = () => browser.runtime.sendMessage({ type: "site" }).then((r) => !!(r && r.match), () => false);
+  let mine = askSite();
+  let mineAt = Date.now();
+  async function isMine() {
+    if (!(await mine) && Date.now() - mineAt > 2000) {
+      mineAt = Date.now();
+      mine = askSite();
+    }
+    return mine;
+  }
 
   // Is the app there? Asked at once on the site, and again when that answer is older than 2 s
   // (the user may have started Slipstream since).
@@ -48,6 +61,31 @@
     return bridge;
   }
 
+  // Another page: a Funkhaus only if its own origin serves the well-known file, from that host
+  // (no redirect), with app "funkhaus" and a protocol this extension speaks. Fetched once per
+  // page and only after the page said hello, so no other site ever sees a request. Same-origin,
+  // so it needs no host permission; without cookies.
+  let proof = null;
+  function provenFunkhaus() {
+    if (!proof) {
+      proof = fetch(location.origin + "/.well-known/funkhaus.json", { credentials: "omit", redirect: "error", cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((o) => !!(o && o.app === "funkhaus" && o.slipstream && PROTOCOLS.includes(o.slipstream.protocol)), () => false);
+    }
+    return proof;
+  }
+
+  // On a proven Funkhaus that is not the configured site: "not-set-up" or "other-site", nothing
+  // about which site. null on any other page.
+  async function elsewhere() {
+    if (await isMine()) return null;
+    if (!(await provenFunkhaus())) return null;
+    let r = null;
+    try { r = await browser.runtime.sendMessage({ type: "setup" }); } catch (e) { r = null; }
+    if (!r || typeof r.configured !== "boolean") return null;
+    return r.configured ? "other-site" : "not-set-up";
+  }
+
   function announce() {
     window.postMessage({ slipstream: 1, type: "ready", extension: VERSION, protocol: 1 }, location.origin);
   }
@@ -65,7 +103,7 @@
   window.addEventListener("message", async (ev) => {
     const d = ev.data;
     if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "launch" || d.re !== undefined) return;
-    if (!(await mine)) return;
+    if (!(await isMine())) return;
     let r;
     try {
       r = await browser.runtime.sendMessage({ type: "launch" });
@@ -83,10 +121,33 @@
       location.origin);
   });
 
+  // A proven Funkhaus elsewhere asks Slipstream to connect to it (docs/extension-protocol.md,
+  // section 1, "connect"). The app asks the user before it changes anything; the background
+  // names the page's own host, never one the page sends.
+  window.addEventListener("message", async (ev) => {
+    const d = ev.data;
+    if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "connect" || d.re !== undefined) return;
+    if (!(await elsewhere())) return;
+    let r = null;
+    try { r = await browser.runtime.sendMessage({ type: "connect" }); } catch (e) { r = null; }
+    window.postMessage(r && r.opened
+      ? { slipstream: 1, type: "connect", re: d.id, ok: true }
+      : { slipstream: 1, type: "connect", re: d.id, ok: false,
+          error: { code: "connect-failed", message: "Slipstream ließ sich nicht öffnen." } },
+      location.origin);
+  });
+
   window.addEventListener("message", async (ev) => {
     const d = ev.data;
     if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "hello" || d.re !== undefined) return;
-    if (!(await mine)) return;
+    if (!(await isMine())) {
+      const reason = await elsewhere();
+      if (reason) {
+        window.postMessage({ slipstream: 1, type: "hello", re: d.id, ok: true, extension: VERSION, protocol: 1,
+          helper: { present: false, reason } }, location.origin);
+      }
+      return;
+    }
     const p = await currentPresence();
     const reply = { slipstream: 1, type: "hello", re: d.id, ok: true, extension: VERSION, protocol: 1,
       helper: p.present ? { present: true, version: p.version, name: p.name }
