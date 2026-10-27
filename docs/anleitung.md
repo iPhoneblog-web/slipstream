@@ -48,6 +48,9 @@ ein, solange Slipstream einen Auftrag hat.
 
 ## Wenn etwas schiefgeht
 
+- **Das Funkhaus findet Slipstream nicht, obwohl App und Extension laufen:** Safari mit ⌘Q
+  beenden und neu öffnen. Ein Safari, das schon vor dem Installieren oder Update lief, kennt die
+  neue Extension nicht.
 - **Das Funkhaus zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
   Ein Klick darauf startet sie im Hintergrund.
 - **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert, die

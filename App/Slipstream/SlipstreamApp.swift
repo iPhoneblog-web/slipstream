@@ -341,6 +341,9 @@ struct SetupView: View {
             } else if let site = model.site {
                 Text("Eingerichtet: \(site.name) (\(site.host))").font(.callout)
             }
+            Text("Nach dem Installieren oder einem Update: Safari mit ⌘Q beenden und neu öffnen, sonst sieht Safari die Extension nicht.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 if busy { ProgressView().controlSize(.small) }

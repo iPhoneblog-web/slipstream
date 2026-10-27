@@ -26,6 +26,9 @@ Things that cost time once, so they cost it only once. Each says what happens an
   Funkhaus got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
   Allow the Funkhaus site again in Safari → Einstellungen → Erweiterungen → Slipstream. The
   menu's line "Safari-Extension" says whether the extension reached the app since it started.
+- **A Safari that was running before an install or update keeps the old extension**: after
+  1.0.3 was deleted and 1.1.0 installed, the Funkhaus got no answer until Safari was quit with
+  ⌘Q (2026-10-27). The install steps and the setup window say so.
 - **A new bundle id is a new app** for macOS and Safari. 1.1.0 moved to
   `io.github.kyrios.slipstream`: the old app must be
   removed, the new extension turned on again, and the WireGuard key is new (the keychain item
