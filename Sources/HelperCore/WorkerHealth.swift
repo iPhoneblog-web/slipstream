@@ -60,8 +60,9 @@ public enum WorkerExit {
 
 /// The worker's log as a file the user can send, `~/Library/Logs/Slipstream/worker.log`: its
 /// standard error and the app's lines about starting and stopping it, each with a time. At
-/// `limit` bytes the file moves to `worker.log.1` (one older file is kept). Not thread-safe:
-/// the app writes from one serial queue.
+/// `limit` bytes the file moves to `worker.log.1` (one older file is kept). A line that cannot be
+/// written (a full disk) is dropped and the file closed; the next line opens it again. A log
+/// line never ends the app. Not thread-safe: the app writes from one serial queue.
 public final class RotatingLog {
     public let url: URL
     let limit: Int
@@ -86,8 +87,15 @@ public final class RotatingLog {
             rotate()
             return write(line, at: date)
         }
-        handle.write(data)
-        size += data.count
+        // The throwing write: FileHandle.write(_:) raises an Objective-C exception on a full
+        // disk, which would end the app over a log line.
+        do {
+            try handle.write(contentsOf: data)
+            size += data.count
+        } catch {
+            try? handle.close()
+            self.handle = nil
+        }
     }
 
     private func open() {
