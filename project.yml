@@ -32,10 +32,11 @@ targets:
   Slipstream:
     type: application
     platform: macOS
+    # The app icon is App/Slipstream/Assets.xcassets/AppIcon.appiconset: full-bleed squares,
+    # which macOS 26 masks itself (a pre-masked .icns lands in a grey frame there).
+    # Resources/AppIcon.png is its 1024-pixel source.
     sources:
       - App/Slipstream
-      - path: Resources/AppIcon.icns
-        buildPhase: resources
     # xcodegen writes the Info.plist from these properties and its defaults, like the
     # entitlements below.
     info:
@@ -46,6 +47,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleIconFile: AppIcon
+        CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSApplicationCategoryType: public.app-category.video
         LSUIElement: true
@@ -62,6 +64,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.kyrios.slipstream
         PRODUCT_NAME: Slipstream
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
     dependencies:
       - package: Slipstream

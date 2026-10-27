@@ -97,6 +97,9 @@ codesign -d --entitlements - --xml "$appex" 2>/dev/null | grep -q com.apple.secu
 # them from its defaults).
 [[ $(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist") == com.apple.Safari.web-extension ]]
 [[ $(plutil -extract LSUIElement raw "$app/Contents/Info.plist") == true ]]
+# The icon from the asset catalog: Assets.car and the AppIcon.icns actool makes from it.
+[[ $(plutil -extract CFBundleIconName raw "$app/Contents/Info.plist") == AppIcon ]]
+[[ -s "$app/Contents/Resources/Assets.car" && -s "$app/Contents/Resources/AppIcon.icns" ]]
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$version" ]]
 for b in "$appex" "$app"; do
   codesign -d --entitlements - --xml "$b" 2>/dev/null | grep -q W9N692KH39.io.github.kyrios.slipstream
