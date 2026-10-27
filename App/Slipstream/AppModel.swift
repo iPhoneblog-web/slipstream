@@ -65,7 +65,7 @@ final class AppModel: ObservableObject {
         if extensionSeen.map({ at > $0 }) ?? true { extensionSeen = at }
     }
 
-    static let uploadCenter = URL(string: "https://upload.iphoneblog.de/")!
+    static let uploadCenter = URL(string: "https://funkhaus.iphoneblog.de/")!
     static let releases = URL(string: "https://github.com/iPhoneblog-web/slipstream/releases/latest")!
 
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
@@ -117,7 +117,7 @@ final class AppModel: ObservableObject {
                 try await startLoopback(jobs)
             } catch {
                 log.error("start: \(error.localizedDescription, privacy: .public)")
-                problem = "Der lokale Dienst für das Upload-Center startet nicht: \(error.localizedDescription)"
+                problem = "Der lokale Dienst für das Funkhaus startet nicht: \(error.localizedDescription)"
             }
         }
         timers.append(Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in

@@ -1,4 +1,4 @@
-// Runs on the upload center, in every frame, from document_start. Answers the page's hello
+// Runs on the Funkhaus (the upload center, at either of its addresses), in every frame, from document_start. Answers the page's hello
 // (docs/extension-protocol.md, section 1) and, with Slipstream running, puts the bridge into the
 // page and hands the page one end of a MessageChannel, the bridge the other.
 (() => {
