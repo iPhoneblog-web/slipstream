@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.8`, toolchain 3; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.12`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
@@ -58,10 +58,6 @@ Its standard error goes to the log window, to the unified log (info level, which
 keep) and to `~/Library/Logs/Slipstream/worker.log`.
 
 ## When the worker stops
-
-Up to 1.3.1 the app started a stopped worker again every 10 s for ever, said only "Keine
-Verbindung zum Encoder", and kept its standard error nowhere on disk; a start that failed was
-never tried again. A Mac Studio took no jobs and left no trace of why. Now:
 
 - **The menu says why**: "Encoder gestoppt: <reason>, neuer Versuch <time>". The reason
   (`HelperCore.WorkerExit`) is the worker's last word on standard error: a Go `panic:` line, else

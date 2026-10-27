@@ -357,4 +357,11 @@ final class WorkerHealthTests: XCTestCase {
         RotatingLog(url: url, limit: 200).write("again", at: t)
         XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).hasSuffix("again\n"))
     }
+
+    /// A full disk drops the line; it does not raise an exception that ends the app.
+    func testFullDisk() {
+        let log = RotatingLog(url: URL(fileURLWithPath: "/dev/full"))
+        log.write("one")
+        log.write("two")
+    }
 }
