@@ -21,8 +21,10 @@ does.
 
 ## 1. Hello: is the helper there?
 
-The content script runs on `https://upload.iphoneblog.de/*`, in every frame, from
-`document_start`. The page asks:
+The content script runs on `https://funkhaus.iphoneblog.de/*`, in every frame, from
+`document_start`. It also matches the old name `https://upload.iphoneblog.de/*`, and the bridge
+accepts both origins, so one release works before and after the server moves; the old name then
+answers a redirect and never shows the page ([TODO.md](TODO.md)). The page asks:
 
 ```js
 window.postMessage({ slipstream: 1, type: "hello", id: "h1" }, location.origin);

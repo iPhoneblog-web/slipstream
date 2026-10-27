@@ -1,8 +1,9 @@
-// The bridge: the extension's own page, a hidden iframe in the upload center. Safari lets it
+// The bridge: the extension's own page, a hidden iframe in the Funkhaus. Safari lets it
 // reach 127.0.0.1, which neither the page nor the content script may (ADR-0007, test 1). It
 // takes requests from the page over the MessagePort the content script handed it and calls
 // Slipstream's loopback endpoint (docs/extension-protocol.md, sections 2 and 3).
-const PAGES = ["https://upload.iphoneblog.de"];
+// The Funkhaus, and its old name while that still serves the page (docs/extension-protocol.md, 1).
+const PAGES = ["https://funkhaus.iphoneblog.de", "https://upload.iphoneblog.de"];
 const SLICE = 64 * 1024 * 1024;
 
 let loop = null;

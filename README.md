@@ -18,7 +18,7 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
 
 ## Installieren
 
-Für Alex, oder wer sonst ProRes ins Upload-Center zieht. Einmal pro Mac, etwa fünf Minuten.
+Für Alex, oder wer sonst ProRes ins Funkhaus zieht. Einmal pro Mac, etwa fünf Minuten.
 
 1. **DMG laden:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg). Öffnen und
    **Slipstream** auf **Programme** ziehen. Danach das DMG im Finder auswerfen.
@@ -27,15 +27,16 @@ Für Alex, oder wer sonst ProRes ins Upload-Center zieht. Einmal pro Mac, etwa f
    kleines Wind-Icon oben rechts in der Menüleiste.
 3. **Die Safari-Extension einschalten:** Safari → **Einstellungen …** → **Erweiterungen**, bei
    **Slipstream** den Haken setzen. Safari fragt nach der Berechtigung für
-   `upload.iphoneblog.de`: **Immer erlauben** (oder „Auf dieser Website immer erlauben“).
-4. **Testen:** das Upload-Center in Safari öffnen (bzw. die Seite neu laden, falls sie schon
+   `funkhaus.iphoneblog.de`: **Immer erlauben** (oder „Auf dieser Website immer erlauben“).
+4. **Testen:** das Funkhaus in Safari öffnen (bzw. die Seite neu laden, falls sie schon
    offen war) und eine kurze ProRes-Datei hineinziehen. Statt der Meldung „ProRes wird hier
    nicht unterstützt“ zeigt die Seite jetzt den Fortschritt der Umwandlung.
 5. **Bei jedem Login automatisch starten** (empfohlen): Systemeinstellungen → **Allgemein** →
    **Anmeldeobjekte** → unter „Beim Anmelden öffnen“ auf **+** und **Slipstream** wählen.
 
 Ein Update: wenn das Menü „Update verfügbar“ zeigt, das neue DMG laden und die App in Programme
-ersetzen. Die Extension bleibt eingeschaltet.
+ersetzen. Die Extension bleibt eingeschaltet. Fragt Safari danach nach der Berechtigung für
+`funkhaus.iphoneblog.de`: **Immer erlauben**.
 
 Wichtig: Slipstream muss laufen, solange ProRes umgewandelt wird, und der Tab bleibt offen, bis
 der Upload durch ist. Schließt du ihn vorher, geht nichts verloren: Upload wieder öffnen, die

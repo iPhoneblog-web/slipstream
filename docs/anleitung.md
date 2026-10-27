@@ -1,12 +1,12 @@
 # Slipstream: Anleitung
 
-Slipstream wandelt ProRes-Dateien, die du ins Upload-Center ziehst, auf deinem Mac um, bevor
+Slipstream wandelt ProRes-Dateien, die du ins Funkhaus ziehst, auf deinem Mac um, bevor
 sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
 Installieren: [README, „Installieren“](../README.md#installieren).
 
 ## ProRes hochladen
 
-- In Final Cut wie gewohnt als ProRes exportieren und die Datei ins Upload-Center ziehen, wie
+- In Final Cut wie gewohnt als ProRes exportieren und die Datei ins Funkhaus ziehen, wie
   jede andere.
 - Die Seite übergibt die Datei an Slipstream, Slipstream wandelt sie um (bei 10 Minuten 4K
   etwa vier Minuten), dann lädt die Seite das Ergebnis hoch. Den Fortschritt zeigen die Seite
@@ -38,7 +38,7 @@ ein, solange Slipstream einen Auftrag hat.
 
 ## Wenn etwas schiefgeht
 
-- **Das Upload-Center zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
+- **Das Funkhaus zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
   Ein Klick darauf startet sie im Hintergrund.
 - **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert oder
   die Extension ist aus (Safari → Einstellungen → Erweiterungen). Dann die Seite neu laden.

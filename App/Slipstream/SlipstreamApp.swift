@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.messageText = "Slipstream arbeitet gerade."
             alert.informativeText = model.queueJob != nil
                 ? "Beim Beenden gibt Slipstream den Auftrag an die Warteschlange zurück; ein anderer Worker beginnt ihn neu."
-                : "Die ProRes-Umwandlung beginnt beim nächsten Start von vorn. Das Upload-Center wartet so lange."
+                : "Die ProRes-Umwandlung beginnt beim nächsten Start von vorn. Das Funkhaus wartet so lange."
             alert.addButton(withTitle: "Beenden")
             alert.addButton(withTitle: "Abbrechen")
             guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
@@ -129,7 +129,7 @@ struct MenuContent: View {
         }
 
         Divider()
-        Button("Upload-Center öffnen") { NSWorkspace.shared.open(AppModel.uploadCenter) }
+        Button("Funkhaus öffnen") { NSWorkspace.shared.open(AppModel.funkhaus) }
         SettingsLink { Text("Einstellungen …") }
         Button("Über Slipstream") { About.show(model) }
         if let latest = model.updateAvailable {
@@ -220,7 +220,7 @@ struct SettingsView: View {
                     Text("1").tag(1)
                     Text("2").tag(2)
                 }
-                Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Upload-Center läuft auf der Media Engine.")
+                Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Kopplung") {
@@ -231,7 +231,7 @@ struct SettingsView: View {
                     }
                     LabeledContent("Tunnel", value: identity.tunnelAddress ?? "nicht gekoppelt")
                 }
-                Text("Koppeln: im Upload-Center auf der Seite Encoder „Diesen Mac als Helper hinzufügen“, in Safari auf diesem Mac.")
+                Text("Koppeln: im Funkhaus auf der Seite Encoder „Diesen Mac als Helper hinzufügen“, in Safari auf diesem Mac.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

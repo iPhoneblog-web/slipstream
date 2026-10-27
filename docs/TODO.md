@@ -2,6 +2,10 @@
 
 Open work, most important first. Delete an item when it is done.
 
+- **Drop the old name** `upload.iphoneblog.de` from `manifest.json` (both `matches`) and from
+  `PAGES` in `bridge.js` once every Mac with Slipstream runs a release that knows
+  `funkhaus.iphoneblog.de` and the old name only redirects there.
+
 - **Thorsten's first real run of v1.0.0** is the extension's two checks ([traps.md](traps.md),
   "Checks"): install, the extension on, pairing on the Encoder page, one ProRes upload inside
   wp-admin. Record there what it showed, and in [extension-protocol.md](extension-protocol.md)
