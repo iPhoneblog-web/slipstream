@@ -28,7 +28,7 @@ settings:
     # Sparkle's EdDSA public key (base64, 32 bytes): the app installs only updates it signs. Its
     # private key is the repository secret SPARKLE_ED_PRIVATE_KEY and nowhere else
     # (docs/release.md, "Updates"). Empty: bin/package refuses a release.
-    SPARKLE_PUBLIC_ED_KEY: ""
+    SPARKLE_PUBLIC_ED_KEY: "wiLD4GVCTBpaU7Q6zL+PkFmt8YxgZHYLLvWK4zZhgkg="
 packages:
   Slipstream:
     path: .
