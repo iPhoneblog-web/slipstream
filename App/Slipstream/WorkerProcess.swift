@@ -31,14 +31,17 @@ final class WorkerProcess: @unchecked Sendable {
 
     static var isPresent: Bool { FileManager.default.isExecutableFile(atPath: Paths.helper("encode-worker").path) }
 
-    func start(key: WireGuardKey, limits: Limits, version: String) throws {
+    func start(key: WireGuardKey, limits: Limits) throws {
         try FileManager.default.createDirectory(at: Paths.workerState, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: Paths.models, withIntermediateDirectories: true)
         process.executableURL = URL(fileURLWithPath: "/usr/bin/nice")
         process.arguments = [
             "-n", "19", Paths.helper("encode-worker").path,
             "--key-stdin", "--tunnel-file", Paths.tunnel.path, "--state-dir", Paths.workerState.path,
-            "--name", AppPairing.macName, "--app-version", version,
+            // No --app-version: the helper API's app_version is the worker's own release, which
+            // the queue compares with its min_app_version (helper.yaml 1.1.0); the worker sends
+            // it by itself. The API has no field for the app around it.
+            "--name", AppPairing.macName,
             "--threads", String(limits.threads), "--gpu", limits.gpu ? "true" : "false", "--jobs", String(limits.jobs),
             "--ffmpeg", Paths.helper("ffmpeg").path, "--ffprobe", Paths.helper("ffprobe").path,
             "--whisper-cli", Paths.helper("whisper-cli").path, "--whisper-models", Paths.models.path,

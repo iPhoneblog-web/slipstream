@@ -10,7 +10,7 @@ The queue offers a worker a job only when its tools match `encoder`'s exactly, a
 
 The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `whisper-cli`
 and `versions.txt`, static, whisper.cpp with Metal. Its versions are encode-queue's, the same on
-`encoder`'s worker image and on the Mac (`v0.1.0`, toolchain 1: ffmpeg 9.0.2, libx265 4.3,
+`encoder`'s worker image and on the Mac (toolchain 1, in encode-queue `v0.1.0` and `v0.2.0`: ffmpeg 9.0.2, libx265 4.3,
 libx264 core 165 r3222, libvmaf 3.2.1, whisper.cpp v1.9.5); `versions.txt` names them, and About
 shows it. `bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to
 those lines. The Mac toolchain has no
