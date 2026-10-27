@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.4`, toolchain 2; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.8`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
@@ -21,10 +21,14 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
   --whisper-version <from Resources/versions.txt>
+  --toolchain-versions <Resources>/versions.txt   (only when the worker's -h lists it, v0.2.8 on)
 ```
 
-`<support>` is `~/Library/Application Support/Slipstream`. It starts only when `tunnel.conf`
-exists (pairing wrote it) and starts again 10 s after it exits.
+`<support>` is `~/Library/Application Support/Slipstream`. Its environment is the app's, with
+`FONTCONFIG_FILE` at `Resources/fonts/fonts.conf`, `XDG_CACHE_HOME` at
+`~/Library/Caches/io.github.kyrios.slipstream` and `Contents/Helpers` first on `PATH`
+([tools.md](tools.md), "Captions"). It starts only when `tunnel.conf` exists (pairing wrote it)
+and starts again 10 s after it exits.
 
 **Standard input:** the first line is the WireGuard private key, base64, from the keychain.
 After it, one JSON object per line:
@@ -45,9 +49,10 @@ After it, one JSON object per line:
 | `idle` | | no job |
 | `result` | `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | the last three results, the count today |
 | `paused` | `until` or null | the pause the queue knows |
-| `update` | `latest` | "Update verfügbar" |
+| `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
+| `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason` | Settings → Leistung, "Whisper-Modelle" |
 
 Its standard error goes to the log window and to the unified log.
 

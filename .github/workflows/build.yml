@@ -1,7 +1,7 @@
 # Every push and pull request: the tests, then a signed and notarised build on Apple Silicon. A
-# tag `v<major>.<minor>.<patch>` also publishes the release: Slipstream.dmg, Slipstream.zip and
-# SHA256SUMS, under names that stay the same, so .../releases/latest/download/Slipstream.dmg is
-# always the newest. docs/release.md.
+# tag `v<major>.<minor>.<patch>` also publishes the release: Slipstream.dmg, Slipstream.zip,
+# appcast.xml and SHA256SUMS, under names that stay the same, so .../releases/latest/download/
+# is always the newest (Sparkle reads appcast.xml there). docs/release.md.
 #
 # Three jobs, so that nothing runs beside a secret it does not need: the tests see no secret;
 # the signing job has the keychain and the notary key but only read access to the repository;
@@ -85,7 +85,22 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
           REQUIRE_WORKER: "1"
+          REQUIRE_UPDATES: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '' }}
         run: bin/package --no-test
+
+      # On a tag: the Sparkle appcast for this release's zip, signed with the EdDSA key, which
+      # exists only as this secret (docs/release.md, "Updates").
+      - name: Appcast
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_SECRETS == 'true'
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          info=dist/Slipstream.app/Contents/Info.plist
+          swift tools/appcast.swift dist/Slipstream.zip "$(plutil -extract CFBundleShortVersionString raw $info)" \
+            "$(plutil -extract CFBundleVersion raw $info)" "https://github.com/$REPO/releases/download/$TAG/Slipstream.zip" \
+            "$(plutil -extract SUPublicEDKey raw $info)" dist/appcast.xml
 
       - name: Remove the signing keychain
         if: always() && env.HAS_SECRETS == 'true'
@@ -116,6 +131,7 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+            dist/appcast.xml
             dist/SHA256SUMS
 
   publish:
@@ -140,13 +156,14 @@ jobs:
           {
             echo "Slipstream ${TAG#v} for Macs with Apple Silicon, macOS 14 or later."
             echo
-            echo "Download **Slipstream.dmg**, open it and drag the app onto Programme."
-            echo "Signed with a Developer ID and notarised. Install steps in German:"
-            echo "[README](https://github.com/${REPO}/blob/${TAG}/README.md#installieren)."
+            echo "Download **Slipstream.dmg**, open it and drag the app onto Programme. Installed"
+            echo "copies update themselves (Sparkle, appcast.xml below). Signed with a Developer ID"
+            echo "and notarised. Install steps: [README](https://github.com/${REPO}/blob/${TAG}/README.md#install)."
             echo
             echo '```'
             cat SHA256SUMS
             echo '```'
           } > ../notes.md
-          gh release create "$TAG" Slipstream.dmg Slipstream.zip SHA256SUMS -R "$REPO" \
+          test -s appcast.xml || { echo "no appcast.xml: installed copies would not see this release" >&2; exit 1; }
+          gh release create "$TAG" Slipstream.dmg Slipstream.zip appcast.xml SHA256SUMS -R "$REPO" \
             --title "Slipstream ${TAG#v}" --notes-file ../notes.md --verify-tag --latest

@@ -106,6 +106,18 @@ itself, and a page elsewhere gets no answer, no bridge and no loopback:
   with the other team's certificate gets a different extension id in Safari and cannot read the
   keychain item of the first.
 
+## Keychain prompts from xcodebuild
+
+**xcodebuild asks the login keychain for github.com** whenever it resolves a Swift package
+(Sparkle): Xcode's own git, and SwiftPM before it downloads Sparkle's binary zip. On a Mac with
+github.com in the keychain, every build opens a prompt, "xcodebuild möchte deine vertraulichen
+Informationen verwenden …", and waits on it; unanswered, the build stalls on "Fetching" or
+"Downloading binary artifact". `bin/package` therefore resolves with
+`-scmProvider system -packageAuthorizationProvider netrc`: the system git and `~/.netrc`
+instead of the keychain. Sparkle is public and needs no credentials. Any other xcodebuild that
+resolves packages takes the same two flags, and none runs in a loop or a watcher on someone's
+Mac: one stalled build is one prompt, a loop is a screen full.
+
 ## Checks
 
 **The extension's two checks**, the part of the loopback test that needs the signed extension:

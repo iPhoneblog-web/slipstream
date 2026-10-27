@@ -12,6 +12,8 @@ public enum WorkerEvent: Equatable, Sendable {
     case paused(until: Date?)
     case update(latest: String)
     case tools([Tool])
+    /// One whisper model the queue wants this Mac to hold, at each change of its state (v0.2.7).
+    case model(Model)
 
     public struct Refusal: Codable, Equatable, Sendable {
         public var kind: String
@@ -21,6 +23,31 @@ public enum WorkerEvent: Equatable, Sendable {
     public struct Tool: Codable, Equatable, Sendable {
         public var name: String
         public var version: String
+    }
+
+    /// `state`: wanted, downloading, checking, calibrating, ready, failed, unavailable. `bytes`
+    /// and `bytesDone` while it downloads, `speed` (times real time) once timed, `reason` when
+    /// it failed or is unavailable.
+    public struct Model: Codable, Equatable, Sendable {
+        public var name: String
+        public var sha256: String
+        public var state: String
+        public var bytes: Int64?
+        public var bytesDone: Int64?
+        public var speed: Double?
+        public var reason: String?
+
+        public init(name: String, sha256: String, state: String, bytes: Int64? = nil, bytesDone: Int64? = nil,
+                    speed: Double? = nil, reason: String? = nil) {
+            (self.name, self.sha256, self.state) = (name, sha256, state)
+            (self.bytes, self.bytesDone, self.speed, self.reason) = (bytes, bytesDone, speed, reason)
+        }
+
+        /// Downloaded share, 0…1, while it downloads.
+        public var fraction: Double? {
+            guard let bytes, let bytesDone, bytes > 0 else { return nil }
+            return min(1, Double(bytesDone) / Double(bytes))
+        }
     }
 
     public static func parse(_ line: String) -> WorkerEvent? {
@@ -56,6 +83,10 @@ public enum WorkerEvent: Equatable, Sendable {
             return .update(latest: latest)
         case "tools":
             return .tools(decode([Tool].self, "tools") ?? [])
+        case "model":
+            guard let d = try? JSONSerialization.data(withJSONObject: object),
+                  let model = try? JSONCoding.decoder.decode(Model.self, from: d) else { return nil }
+            return .model(model)
         default:
             return nil
         }
@@ -73,6 +104,30 @@ public struct WorkerJob: Codable, Equatable, Sendable {
     public var fps: Double?
     public var speed: Double?
     public var etaS: Int?
+}
+
+/// Which flags the embedded worker takes, from its `-h` usage, so the app passes a newer flag
+/// only to a worker that knows it (an unknown flag stops a Go worker at start).
+public enum WorkerFlags {
+    public static func supports(_ flag: String, usage: String) -> Bool {
+        usage.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("-\(flag) ") || $0.trimmingCharacters(in: .whitespaces) == "-\(flag)" }
+    }
+}
+
+/// The worker's environment: the app's, with the toolchain's fonts for libass (`FONTCONFIG_FILE`,
+/// unless already set, as the worker itself would), fontconfig's cache under `cache`, and the
+/// app's helpers first on `PATH`, so the worker finds the toolchain's `fc-list` before any other.
+public enum WorkerEnvironment {
+    public static func make(base: [String: String], helpers: String, fontsConf: String?, cache: String) -> [String: String] {
+        var env = base
+        if let fontsConf, (env["FONTCONFIG_FILE"] ?? "").isEmpty {
+            env["FONTCONFIG_FILE"] = fontsConf
+        }
+        env["XDG_CACHE_HOME"] = cache
+        let path = env["PATH"].flatMap { $0.isEmpty ? nil : $0 } ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        env["PATH"] = ([helpers] + path.split(separator: ":").map(String.init).filter { $0 != helpers }).joined(separator: ":")
+        return env
+    }
 }
 
 /// What the app writes to the worker's standard input, one JSON object per line, after the

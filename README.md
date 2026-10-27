@@ -53,16 +53,18 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
    "Diesen Mac als Helper hinzufügen".
 
-An update: when the menu says "Update verfügbar", download the new DMG, replace the app, and
-quit Safari with ⌘Q and open it again. The site, the extension and the pairing stay.
+Updates install themselves: Slipstream checks once a day (Sparkle) and asks before it installs a
+new release in place; "Nach Updates suchen …" in the menu checks at once. After an update, quit
+Safari with ⌘Q and open it again. The site, the extension and the pairing stay.
 
 ## Licences
 
 Slipstream's own code is MIT: [LICENSE](LICENSE). It embeds programs under their own licences:
 encode-worker (MIT) and encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
 (with x264 and x265, GPLv2 or later; LAME, LGPL; libvmaf, BSD-2-Clause-Patent) and whisper-cli is
-MIT. Every licence is in the app (menu: "Lizenzen …"); the source of the toolchain is attached to
-encode-queue's `toolchain-<N>` release ([docs/tools.md](docs/tools.md), "Licences").
+MIT, as is Sparkle, which installs updates. Every licence is in the app (menu: "Lizenzen …");
+the source of the toolchain is attached to encode-queue's `toolchain-<N>` release
+([docs/tools.md](docs/tools.md), "Licences").
 
 ## The code
 
@@ -96,7 +98,7 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | [docs/funkhaus-api.md](docs/funkhaus-api.md) | What a Funkhaus offers Slipstream: the well-known file, the page's messages, pairing |
 | [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
-| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp: encode-queue's toolchain |
+| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, libass and its fonts, whisper.cpp: encode-queue's toolchain |
 | [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |
 | [docs/traps.md](docs/traps.md) | Safari, priority, encoding and signing traps |
 | [docs/anleitung.md](docs/anleitung.md) | The menu and what helps when something fails, in German, the app's language |

@@ -3,17 +3,44 @@
 ## A release
 
 A tag `v<major>.<minor>.<patch>` on `main` is a release. `.github/workflows/build.yml` builds
-every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip` and
-`SHA256SUMS` as that tag's release, marked latest. The file names carry no version, so
+every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip`,
+`appcast.xml` and `SHA256SUMS` as that tag's release, marked latest. The file names carry no version, so
 `releases/latest/download/Slipstream.dmg` is always the newest.
 
 ```bash
 git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1
 ```
 
-Never upload a build from a Mac by hand. There is no Sparkle: when the queue asks for a newer
-app (the worker's `update` event), the menu says "Update verfügbar" and links to the latest
-release; the user installs it by hand.
+Never upload a build from a Mac by hand.
+
+## Updates
+
+**Sparkle 2** (pinned in `project.yml`) updates installed copies. Once a day the app reads
+`https://github.com/kyrios/slipstream/releases/latest/download/appcast.xml`, which every release
+publishes beside its DMG, and installs the release's `Slipstream.zip` in place, after checking
+its EdDSA signature against `SUPublicEDKey`. "Nach Updates suchen …" checks at once; so does
+"Update verfügbar", which appears when the queue asks for a newer app (the worker's `update`
+event).
+
+- **The key pair.** The public key is `SPARKLE_PUBLIC_ED_KEY` in `project.yml`, built into
+  `SUPublicEDKey`. The private key, the base64 of a 32-byte Ed25519 seed as Sparkle's
+  `generate_keys -x` exports it, exists only as the repository secret `SPARKLE_ED_PRIVATE_KEY`:
+  never in a file, a commit, a log or a message. The maintainer makes it and sets the secret in
+  one pipe, so nothing else holds it:
+
+  ```bash
+  swift -e 'import CryptoKit; import Foundation; let k = Curve25519.Signing.PrivateKey(); FileHandle.standardError.write(Data((k.publicKey.rawRepresentation.base64EncodedString() + "\n").utf8)); FileHandle.standardOutput.write(Data(k.rawRepresentation.base64EncodedString().utf8))' | gh secret set SPARKLE_ED_PRIVATE_KEY -R kyrios/slipstream
+  ```
+
+  The line it prints is the public key for `project.yml`. **A lost private key** means a new
+  pair: copies with the old public key can then no longer update themselves, and their users
+  install the next DMG by hand once.
+- **On a tag**, CI's build job runs `tools/appcast.swift`: it signs `Slipstream.zip` with the
+  secret, checks the signature against the app's own `SUPublicEDKey`, and writes
+  `appcast.xml`, which the release attaches. `bin/package` refuses a tagged build without a
+  public key, and the publishing job a release without an appcast.
+- **Sparkle inside the app** is signed inside out by `bin/package`: its XPC services, Autoupdate,
+  Updater.app, then the framework, like everything else with the hardened runtime.
 
 ## What CI does
 
@@ -46,6 +73,7 @@ entitlements, its extension point or its version.
 | `NOTARY_API_KEY_P8` | the App Store Connect team key `slipstream-notary` (access Developer), the `.p8` text |
 | `NOTARY_API_KEY_ID` | its key id |
 | `NOTARY_API_ISSUER_ID` | its issuer id |
+| `SPARKLE_ED_PRIVATE_KEY` | Sparkle's EdDSA private key, the base64 Ed25519 seed (see "Updates"); used on tags only |
 
 No agent handles the keys; the maintainer sets the secrets.
 

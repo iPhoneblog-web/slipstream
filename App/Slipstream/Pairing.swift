@@ -13,6 +13,21 @@ enum Paths {
     static var tunnel: URL { support.appendingPathComponent("tunnel.conf") }
     static var workerState: URL { support.appendingPathComponent("worker", isDirectory: true) }
     static var models: URL { support.appendingPathComponent("models", isDirectory: true) }
+    /// fontconfig's cache of the toolchain's fonts: `~/Library/Caches/<bundle id>`.
+    static var caches: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(SlipstreamIDs.bundle, isDirectory: true)
+    }
+
+    /// The toolchain's fonts.conf (Inter only), in `Contents/Resources/fonts`; nil without the
+    /// toolchain.
+    static var fontsConf: URL? { Bundle.main.url(forResource: "fonts", withExtension: "conf", subdirectory: "fonts") }
+
+    /// What the whisper models in `models` take on disk.
+    static var modelsBytes: Int64 {
+        let files = (try? FileManager.default.contentsOfDirectory(at: models, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        return files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
 
     /// The app group container the extension reads; created by hand when the system gives none
     /// (an ad hoc build without the entitlement).
@@ -27,8 +42,10 @@ enum Paths {
     /// The toolchain's `versions.txt`, in `Contents/Resources`: codesign takes no data in
     /// `Contents/Helpers`.
     static var toolVersions: String? {
-        Bundle.main.url(forResource: "versions", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        toolVersionsFile.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
     }
+
+    static var toolVersionsFile: URL? { Bundle.main.url(forResource: "versions", withExtension: "txt") }
 
     /// whisper.cpp's release from it (`whisper.cpp v1.9.5`), for the worker, which looks for the
     /// file beside `whisper-cli` otherwise.

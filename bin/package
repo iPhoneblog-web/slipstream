@@ -29,7 +29,11 @@ build=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 identity=${SIGN_IDENTITY:--}
 
 xcodegen generate --quiet
+# The system git and no keychain for packages: Xcode's own would ask the login keychain for
+# github.com at every resolve, a prompt per build that blocks it (docs/traps.md, "Keychain
+# prompts from xcodebuild"). Sparkle is public and needs no credentials.
 xcodebuild -project Slipstream.xcodeproj -scheme Slipstream -configuration Release -derivedDataPath build/dd \
+  -scmProvider system -packageAuthorizationProvider netrc \
   MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build" -quiet build
 swift build -c release --arch arm64 --product slipstream-cli
 cli_dir=$(swift build -c release --arch arm64 --show-bin-path)
@@ -48,13 +52,16 @@ python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$appex/Contents/R
 helpers="$app/Contents/Helpers"
 mkdir -p "$helpers"
 cp "$cli_dir/slipstream-cli" "$helpers/"
-for f in build/tools/ffmpeg build/tools/ffprobe build/tools/whisper-cli build/worker/encode-worker; do
+for f in build/tools/ffmpeg build/tools/ffprobe build/tools/fc-list build/tools/whisper-cli build/worker/encode-worker; do
   [[ -f $f ]] && cp "$f" "$helpers/"
 done
 # Data is no code: codesign takes only executables in Contents/Helpers.
 for f in build/tools/versions.txt build/tools/versions.json; do
   [[ -f $f ]] && cp "$f" "$app/Contents/Resources/"
 done
+# Resources/fonts: Inter and the fonts.conf that sees only it, for libass's captions; the worker
+# gets FONTCONFIG_FILE pointing there (docs/tools.md, "Captions").
+[[ -d build/tools/fonts ]] && ditto build/tools/fonts "$app/Contents/Resources/fonts"
 # Resources/licenses: Slipstream's own (MIT), encode-worker's (MIT), and the toolchain's folder:
 # each component's licence and SOURCES.md, with where the source is. ffmpeg and ffprobe are
 # GPLv3 programs; the app ships them only with these (docs/tools.md, "Licences").
@@ -63,12 +70,19 @@ mkdir -p "$lic"
 cp LICENSE "$lic/Slipstream-LICENSE"
 [[ -f build/worker/LICENSE ]] && cp build/worker/LICENSE "$lic/encode-worker-LICENSE"
 [[ -d build/tools/licenses ]] && cp build/tools/licenses/* "$lic/"
+# Sparkle (MIT, with the notices of the code it carries) from the package Xcode checked out.
+cp build/dd/SourcePackages/checkouts/Sparkle/LICENSE "$lic/Sparkle-LICENSE"
 if [[ -x "$helpers/ffmpeg" && ! -s "$lic/SOURCES.md" ]]; then
   print "ffmpeg without its licences: the toolchain must carry licenses/ (toolchain 2 or later)" >&2
   exit 1
 fi
 # REQUIRE_WORKER=1 (CI) refuses the ProRes-only fallback.
 if [[ -x "$helpers/encode-worker" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
+  # Toolchain 3 on: captions need the toolchain's fc-list and fonts, or libass takes another font.
+  if [[ ! -x "$helpers/fc-list" || ! -f "$app/Contents/Resources/fonts/fonts.conf" ]]; then
+    print "the worker without fc-list or Resources/fonts: run bin/fetch-worker (toolchain 3 or later)" >&2
+    exit 1
+  fi
   print "embedded: encode-worker $("$helpers/encode-worker" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
 elif [[ -n ${REQUIRE_WORKER:-} ]]; then
   print "no worker or tools in build/: run bin/fetch-worker" >&2
@@ -87,6 +101,15 @@ done
 if [[ $identity == - ]]; then ts=(--timestamp=none); else ts=(--timestamp); fi
 sign() { codesign --force --sign "$identity" --options runtime "${ts[@]}" "$@"; }
 for f in "$helpers"/*(.x); do sign "$f"; done
+# Sparkle, inside out as its documentation asks: its XPC services (the downloader keeps its
+# entitlements), Autoupdate, Updater.app, then the framework.
+fw="$app/Contents/Frameworks/Sparkle.framework"
+if [[ -d $fw ]]; then
+  for x in "$fw"/Versions/B/XPCServices/*.xpc(N); do sign --preserve-metadata=entitlements "$x"; done
+  sign "$fw/Versions/B/Autoupdate"
+  sign "$fw/Versions/B/Updater.app"
+  sign "$fw"
+fi
 sign --entitlements Extension/SlipstreamExtension.entitlements "$appex"
 sign --entitlements App/Slipstream/Slipstream.entitlements "$app"
 codesign --verify --strict --deep --verbose=2 "$app"
@@ -97,6 +120,13 @@ codesign -d --entitlements - --xml "$appex" 2>/dev/null | grep -q com.apple.secu
 # them from its defaults).
 [[ $(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist") == com.apple.Safari.web-extension ]]
 [[ $(plutil -extract LSUIElement raw "$app/Contents/Info.plist") == true ]]
+# Updates: Sparkle's feed and its public key. REQUIRE_UPDATES=1 (CI on a tag) refuses a release
+# without the key: it could never update itself.
+plutil -extract SUFeedURL raw "$app/Contents/Info.plist" >/dev/null
+if [[ -n ${REQUIRE_UPDATES:-} && -z $(plutil -extract SUPublicEDKey raw "$app/Contents/Info.plist" 2>/dev/null) ]]; then
+  print "no SPARKLE_PUBLIC_ED_KEY in project.yml: a release without it cannot update itself" >&2
+  exit 1
+fi
 # The icon from the asset catalog: Assets.car and the AppIcon.icns actool makes from it.
 [[ $(plutil -extract CFBundleIconName raw "$app/Contents/Info.plist") == AppIcon ]]
 [[ -s "$app/Contents/Resources/Assets.car" && -s "$app/Contents/Resources/AppIcon.icns" ]]

@@ -49,6 +49,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var pausedUntil: Date?
     @Published private(set) var logLines: [String] = []
     @Published private(set) var tools: [WorkerEvent.Tool] = []
+    /// The whisper models the queue wants this Mac to hold, in the order the worker named them.
+    @Published private(set) var models: [WorkerEvent.Model] = []
     @Published private(set) var updateAvailable: String?
     @Published private(set) var problem: String?
     /// When Safari's extension last reached this app since it started: the app extension's
@@ -57,6 +59,7 @@ final class AppModel: ObservableObject {
 
     private let startedAt = Date()
     private let windows = Windows()
+    let updates = Updates()
 
     /// The Funkhaus site this Mac works for; nil until the setup window checked one.
     @Published private(set) var site: SiteConfig?
@@ -294,6 +297,12 @@ final class AppModel: ObservableObject {
             updateAvailable = latest
         case .tools(let tools):
             self.tools = tools
+        case .model(let m):
+            if let i = models.firstIndex(where: { $0.sha256 == m.sha256 }) {
+                models[i] = m
+            } else {
+                models.append(m)
+            }
         }
     }
 

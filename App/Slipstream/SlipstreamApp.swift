@@ -165,8 +165,9 @@ struct MenuContent: View {
             Button("Einstellungen …") { model.showSettings() }
             Button("Über Slipstream") { About.show(model) }
             Button("Lizenzen …") { About.showLicences() }
+            Button("Nach Updates suchen …") { model.updates.check() }
             if let latest = l.update {
-                Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+                Button("Update verfügbar: \(latest) …") { model.updates.check() }
             }
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
@@ -232,6 +233,10 @@ struct SettingsView: View {
                 Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
                 Text("Ausschalten geht auch in den Systemeinstellungen → Allgemein → Anmeldeobjekte.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Automatisch nach Updates suchen", isOn: Binding(
+                    get: { model.updates.updater.automaticallyChecksForUpdates },
+                    set: { model.updates.updater.automaticallyChecksForUpdates = $0 }))
+                Button("Nach Updates suchen …") { model.updates.check() }
                 LabeledContent("Version", value: model.version)
                 Button("Lizenzen …") { About.showLicences() }
             }
@@ -247,6 +252,7 @@ struct SettingsView: View {
                 }
                 Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
+                ModelsSection(model: model)
             }
             .formStyle(.grouped)
             .tabItem { Label("Leistung", systemImage: "cpu") }
@@ -279,6 +285,69 @@ struct SettingsView: View {
         .onChange(of: jobs) { model.limitsChanged() }
         .task { identity = try? await AppPairing { _ in }.identity() }
         .onAppear { loginItem = LoginItem.isOn }
+    }
+}
+
+/// Settings → Leistung: the whisper models the queue wants this Mac to hold, from the worker's
+/// `model` events (docs/worker.md), and what they take on disk.
+struct ModelsSection: View {
+    @ObservedObject var model: AppModel
+    @State private var diskBytes: Int64 = 0
+
+    var body: some View {
+        Section {
+            if model.models.isEmpty {
+                Text("Noch keine. Nach dem Koppeln sagt das Funkhaus, welche Modelle dieser Mac halten soll; Slipstream lädt sie dann selbst.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.models, id: \.sha256) { m in
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent(Self.title(m.name)) {
+                        Text(Self.state(m)).foregroundStyle(m.state == "failed" ? .red : .secondary)
+                    }
+                    if m.state == "downloading" {
+                        ProgressView(value: m.fraction ?? 0)
+                    }
+                    if let reason = m.reason, ["failed", "unavailable"].contains(m.state) {
+                        Text(reason).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            LabeledContent("Belegt", value: ByteCountFormatter.string(fromByteCount: diskBytes, countStyle: .file))
+            Button("Im Finder zeigen") { NSWorkspace.shared.activateFileViewerSelecting([Paths.models]) }
+            Text("Das Funkhaus wählt die Modelle nach der gemessenen Geschwindigkeit dieses Macs. Ohne GPU rechnet Whisper auf der CPU, deutlich langsamer; dann bekommt der Mac kleinere Modelle oder keine Whisper-Aufträge.")
+                .font(.caption).foregroundStyle(.secondary)
+        } header: {
+            Text("Whisper-Modelle")
+        }
+        .onAppear { diskBytes = Paths.modelsBytes }
+        .onChange(of: model.models) { diskBytes = Paths.modelsBytes }
+    }
+
+    /// `ggml-large-v3-turbo.bin` → `large-v3-turbo`.
+    static func title(_ file: String) -> String {
+        var name = file
+        if name.hasPrefix("ggml-") { name.removeFirst(5) }
+        if name.hasSuffix(".bin") { name.removeLast(4) }
+        return name
+    }
+
+    static func state(_ m: WorkerEvent.Model) -> String {
+        let size = m.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+        switch m.state {
+        case "wanted": return ["gewünscht", size].compactMap { $0 }.joined(separator: " · ")
+        case "downloading":
+            let done = m.bytesDone.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+            return "lädt " + [done, size].compactMap { $0 }.joined(separator: " von ")
+        case "checking": return "wird geprüft"
+        case "calibrating": return "wird gemessen"
+        case "ready":
+            let speed = m.speed.map { $0.formatted(.number.precision(.fractionLength(1))) + "× Echtzeit" }
+            return ["bereit", speed, size].compactMap { $0 }.joined(separator: " · ")
+        case "failed": return "fehlgeschlagen"
+        case "unavailable": return "nicht verfügbar"
+        default: return m.state
+        }
     }
 }
 

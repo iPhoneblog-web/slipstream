@@ -37,12 +37,16 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   einem Update von Slipstream fragt Safari das neu).
 - **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
   (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, ob Whisper die GPU
-  nutzen darf, Aufträge gleichzeitig), **Funkhaus** (welches, und ein anderes einrichten),
+  nutzen darf, Aufträge gleichzeitig, und die Whisper-Modelle: welche das Funkhaus will, ob sie
+  laden oder bereit sind, wie schnell, wie viel Platz sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
 - **Bei der Anmeldung starten** (beim Einrichten an, in den Einstellungen umschaltbar):
   Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
   Anmeldeobjekte; dort ausgeschaltet, zeigen es die Einstellungen auch aus.
+- **Nach Updates suchen …:** Slipstream sucht ohnehin einmal am Tag und fragt, bevor es eine neue
+  Version installiert; abschalten in Einstellungen → Allgemein. Danach Safari mit ⌘Q beenden und
+  neu öffnen.
 - **Lizenzen …** zeigt die Lizenzen von Slipstream und von allem, was es mitbringt.
 
 Slipstream rechnet mit niedriger Priorität: was du am Mac tust, geht vor. Der Mac schläft nicht
