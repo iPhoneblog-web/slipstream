@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>W9N692KH39.io.github.iphoneblog-web.slipstream</string>
+		<string>W9N692KH39.io.github.kyrios.slipstream</string>
 	</array>
 </dict>
 </plist>

@@ -29,16 +29,19 @@ public struct LoopbackAPI: Sendable {
     public let name: String
     public let jobs: ProResJobs
     public let pairing: Pairing
-    /// Called for every request with the right token: the bridge reached the app.
+    /// Called for every request with the right token and site: the bridge reached the app.
     public let seen: (@Sendable () -> Void)?
+    /// The configured site's origin (`https://<host>`), read at every request; nil before setup.
+    public let site: @Sendable () -> String?
 
     public init(token: String, version: String, name: String, jobs: ProResJobs, pairing: Pairing,
-                seen: (@Sendable () -> Void)? = nil) {
+                site: @escaping @Sendable () -> String?, seen: (@Sendable () -> Void)? = nil) {
         self.token = token
         self.version = version
         self.name = name
         self.jobs = jobs
         self.pairing = pairing
+        self.site = site
         self.seen = seen
     }
 
@@ -59,7 +62,7 @@ public struct LoopbackAPI: Sendable {
         if req.method == "OPTIONS" {
             var headers = cors(origin)
             headers += [("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS"),
-                        ("Access-Control-Allow-Headers", "X-Slipstream-Token, Content-Type, Content-Range, Range"),
+                        ("Access-Control-Allow-Headers", "X-Slipstream-Token, X-Slipstream-Site, Content-Type, Content-Range, Range"),
                         ("Access-Control-Max-Age", "600")]
             if req.header("access-control-request-private-network") != nil {
                 headers.append(("Access-Control-Allow-Private-Network", "true"))
@@ -69,10 +72,14 @@ public struct LoopbackAPI: Sendable {
         var response: HTTPResponse
         if !Self.sameToken(req.header("x-slipstream-token") ?? "", token) {
             response = Self.problem(JobError("bad-request", "Falsches Token."), status: 403)
+        } else if site() == nil || req.header("x-slipstream-site") != site() {
+            // The bridge names the page it serves; anything but the configured site, or no site
+            // set up yet, gets nothing (docs/traps.md, "Origins").
+            response = Self.problem(JobError("bad-request", "Nicht die eingerichtete Funkhaus-Seite."), status: 403)
         } else {
             seen?()
             do {
-                response = try await route(req)
+                response = try await route(req, site: site())
             } catch {
                 let e = JobError.from(error)
                 response = Self.problem(e, status: e.status)
@@ -106,7 +113,8 @@ public struct LoopbackAPI: Sendable {
         var `protocol` = SlipstreamIDs.protocolVersion
     }
 
-    private func route(_ req: HTTPRequest) async throws -> HTTPResponse {
+    /// `site` is the checked site; every job call is for that site's jobs only.
+    private func route(_ req: HTTPRequest, site: String?) async throws -> HTTPResponse {
         let s = req.segments
         guard s.first == "v1" else { return HTTPResponse(status: 404) }
         // `PUT jobs/:id/source`: the route with the id taken out.
@@ -126,21 +134,21 @@ public struct LoopbackAPI: Sendable {
             try await pairing.setTunnel(config)
             return HTTPResponse(status: 204)
         case "GET jobs":
-            return .json(["jobs": await jobs.list()])
+            return .json(["jobs": await jobs.list(site: site)])
         case "PUT jobs/:id":
             guard let body = try? JSONCoding.decoder.decode(OpenBody.self, from: req.body) else {
                 throw JobError("bad-request", "Name oder Größe fehlt.")
             }
-            return .json(try await jobs.open(id: id, name: body.name, size: body.size, lastModified: body.lastModified))
+            return .json(try await jobs.open(id: id, name: body.name, size: body.size, lastModified: body.lastModified, site: site))
         case "GET jobs/:id":
-            return .json(try await jobs.status(id: id))
+            return .json(try await jobs.status(id: id, site: site))
         case "PUT jobs/:id/source":
             guard let header = req.header("content-range"), let (range, total) = HTTPParser.contentRange(header) else {
                 throw JobError("bad-request", "Content-Range fehlt.")
             }
-            return .json(try await jobs.receive(id: id, range: range, total: total, data: req.body))
+            return .json(try await jobs.receive(id: id, range: range, total: total, data: req.body, site: site))
         case "GET jobs/:id/intermediate":
-            let status = try await jobs.status(id: id)
+            let status = try await jobs.status(id: id, site: site)
             guard status.phase == .ready, let info = status.intermediate else {
                 throw JobError("not-ready", "Die Datei ist noch nicht fertig.")
             }
@@ -152,13 +160,13 @@ public struct LoopbackAPI: Sendable {
             guard range.count <= ProResJobs.maxSlice else {
                 throw JobError("bad-request", "Höchstens 64 MiB auf einmal.")
             }
-            let (data, total) = try await jobs.readIntermediate(id: id, range: range)
+            let (data, total) = try await jobs.readIntermediate(id: id, range: range, site: site)
             let last = range.lowerBound + Int64(data.count) - 1
             return HTTPResponse(status: 206, headers: [("Content-Type", "video/mp4"),
                                                        ("Content-Range", "bytes \(range.lowerBound)-\(last)/\(total)")],
                                 body: data)
         case "DELETE jobs/:id":
-            try await jobs.delete(id: id)
+            try await jobs.delete(id: id, site: site)
             return HTTPResponse(status: 204)
         default:
             return HTTPResponse(status: 404)

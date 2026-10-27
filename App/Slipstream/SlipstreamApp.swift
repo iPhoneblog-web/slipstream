@@ -106,6 +106,17 @@ struct MenuContent: View {
     @AppStorage("threads") private var threads = AppModel.maxThreads
 
     var body: some View {
+        if model.site == nil {
+            Text("Nicht eingerichtet")
+            Button("Einrichten …") { model.showSetup() }
+            Divider()
+            Button("Beenden") { NSApp.terminate(nil) }
+        } else {
+            configured
+        }
+    }
+
+    @ViewBuilder private var configured: some View {
         Text(stateLine)
         if let problem = model.problem {
             Text(problem)
@@ -158,14 +169,14 @@ struct MenuContent: View {
             Text("Safari-Extension: verbunden, zuletzt \(seen.formatted(date: .omitted, time: .shortened))")
         } else {
             Text("Safari-Extension: noch nicht verbunden")
-            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, upload.iphoneblog.de und funkhaus.iphoneblog.de)")
+            Text("Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, \(model.site?.host ?? ""))")
         }
         ForEach(model.refused, id: \.kind) { r in
             Text("Keine \(r.kind)-Aufträge: \(r.reason)")
         }
 
         Divider()
-        Button("Funkhaus öffnen") { NSWorkspace.shared.open(AppModel.uploadCenter) }
+        Button("Funkhaus öffnen") { model.openSite() }
         Button("Einstellungen …") { model.showSettings() }
         Button("Über Slipstream") { About.show(model) }
         if let latest = model.updateAvailable {
@@ -259,6 +270,10 @@ struct SettingsView: View {
                 Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Funkhaus") {
+                LabeledContent("Seite", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
+                Button("Andere Seite einrichten …") { model.showSetup() }
+            }
             Section("Kopplung") {
                 if let identity {
                     LabeledContent("Name", value: identity.name)
@@ -277,6 +292,50 @@ struct SettingsView: View {
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
         .task { identity = try? await AppPairing { _ in }.identity() }
+    }
+}
+
+/// First launch, and "Andere Seite einrichten": the Funkhaus site, checked before it is kept.
+struct SetupView: View {
+    @ObservedObject var model: AppModel
+    @State private var host = ""
+    @State private var problem: String?
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Für welche Funkhaus-Seite arbeitet dieser Mac?").font(.headline)
+            Text("Slipstream und seine Safari-Extension antworten nur dieser Seite.")
+                .font(.callout).foregroundStyle(.secondary)
+            TextField("funkhaus.example.org", text: $host)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { check() }
+            if let problem {
+                Text(problem).font(.callout).foregroundStyle(.red)
+            } else if let site = model.site {
+                Text("Eingerichtet: \(site.name) (\(site.host))").font(.callout)
+            }
+            HStack {
+                Spacer()
+                if busy { ProgressView().controlSize(.small) }
+                Button("Prüfen und speichern") { check() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(busy || host.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+        .onAppear { host = model.site?.host ?? "" }
+    }
+
+    private func check() {
+        busy = true
+        problem = nil
+        Task {
+            problem = await model.checkSite(host)
+            busy = false
+            if problem == nil { NSApp.keyWindow?.close() }
+        }
     }
 }
 

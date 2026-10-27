@@ -7,7 +7,7 @@ Things that cost time once, so they cost it only once. Each says what happens an
 - **Safari blocks `http://127.0.0.1` and `http://localhost` from an HTTPS page and from a
   content script**: mixed content, "Load failed", and no request arrives. An extension page gets
   through, as an iframe in the page or as the background. Hence the bridge
-  ([extension-protocol.md](extension-protocol.md)). Measured on Safari 26 (ADR-0007, test 1).
+  ([extension-protocol.md](extension-protocol.md)). Measured on Safari 26, 2026-10-26.
 - **Safari forgets "Nicht signierte Erweiterungen erlauben" and every temporary extension when it
   quits.** A temporary extension's content script runs only after the tab reloads. The signed
   build avoids both.
@@ -21,12 +21,45 @@ Things that cost time once, so they cost it only once. Each says what happens an
   port and token the app writes into their app group; the app extension needs no network.
 - **`curl` waits a second per request** for `100 Continue` when it sends a large body; the
   loopback answers it. Safari does not send `Expect`.
-
 - **Safari runs the content script only on a site the user allowed for the extension**, and a
-  new build of the app registers the extension anew: after replacing 1.0.0 with 1.0.1 the upload
-  center got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
-  Allow `funkhaus.iphoneblog.de` (and `upload.iphoneblog.de`) again in Safari → Einstellungen → Erweiterungen → Slipstream. The
+  new build of the app registers the extension anew: after replacing 1.0.0 with 1.0.1 the
+  Funkhaus got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
+  Allow the Funkhaus site again in Safari → Einstellungen → Erweiterungen → Slipstream. The
   menu's line "Safari-Extension" says whether the extension reached the app since it started.
+- **A new bundle id is a new app** for macOS and Safari. 1.1.0 moved to
+  `io.github.kyrios.slipstream`: the old app must be
+  removed, the new extension turned on again, and the WireGuard key is new (the keychain item
+  belongs to the old app), so the Mac is paired again. Jobs under
+  `~/Library/Application Support/Slipstream` stay.
+
+## Origins
+
+**Slipstream answers one site**, the Funkhaus set up at first launch (`SiteConfig`, the app
+group's `site.json`). The manifest matches every https page, because the site is the user's
+choice and a Safari extension cannot change its matches at run time; each part checks the origin
+itself, and a page elsewhere gets no answer, no bridge and no loopback:
+
+| where | checks | test |
+|---|---|---|
+| the background (`background.js`) | answers a content script only `{match}` for its page; `presence` and `launch` only for a page of the site; the port and token only to the bridge | `Tests/extension`: "a page elsewhere learns nothing", "only the bridge the port and token", "before setup nobody matches" |
+| the content script (`content.js`) | asks once per page whether it is the site; elsewhere it answers no `hello` or `launch` and puts no frame into the page | "silent on a foreign page, no bridge in it" |
+| the bridge (`bridge.js`) | web-accessible on every https page, so any page could frame it: it takes a port only from a parent on the site, and names that site to the loopback | "a parent elsewhere gets no port", "no site set up, no port" |
+| the loopback (`LoopbackAPI`) | the request's `Origin` must be an extension page, the token must match, and `X-Slipstream-Site` must be the configured site; before setup nothing passes | `LoopbackTests`: `testOnlyTheExtensionsOrigin`, `testOnlyTheConfiguredSite` |
+| the ProRes jobs (`ProResJobs`) | each job keeps the site that made it; after a site change the new site neither lists, reads, writes nor deletes the old one's | `testJobsBelongToTheirSite` |
+| the app extension (`SafariWebExtensionHandler`) | reads the site from the app group and checks it is a host before handing it on; before setup `presence` says `not-set-up` | the setup and the site file: `SiteConfigTests` |
+
+- **What Safari shows when the extension is turned on:** that it can read and change web pages
+  on **all websites** ("alle Websites"), because of the `https://*/*` match. Safari still asks
+  per site before a content script runs there; the user allows the Funkhaus site once. Other
+  sites run the content script only if the user allows them too, and then it stays silent.
+- **The stored host is written as the browser writes the origin** (`SiteConfig.host`): `:443` goes,
+  `:08443` becomes `:8443`, and a port is plain ASCII digits (Swift's `Int("+443")` is 443, and
+  that host made no URL). Otherwise the extension would compare against an origin Safari never
+  reports.
+- **The site is checked before it is kept:** `https://<host>/.well-known/funkhaus.json` must answer
+  `{"app": "funkhaus", "slipstream": {"protocol": 1, "min_version": …}}` with a protocol this
+  version speaks and a minimum it meets (`SiteConfig.check`). A login page or another app
+  answers something else and is refused.
 
 ## The menu bar app
 
@@ -63,11 +96,11 @@ Things that cost time once, so they cost it only once. Each says what happens an
 
 ## Checks
 
-**The extension's two checks** (ADR-0007 test 1, the part that needs the signed extension):
-the bridge inside wp-admin's frame and under the upload center's real page and CSP, and the
-intermediate fetched back in 64 MiB `Range` slices through the bridge. **Thorsten's first real
-run of v1.0.0 is these checks**: he installs it, turns the extension on in Safari, pairs his Mac
-on the Encoder page and uploads one ProRes file through the upload center inside wp-admin. The
-pairing passes the bridge in the frame; the upload passes the file in 64 MiB slices and the
-intermediate back in 64 MiB `Range` slices. A test build with a self-test in the frame was
-built and dropped: any page of wp-admin's origin could have driven it.
+**The extension's two checks**, the part of the loopback test that needs the signed extension:
+the bridge inside the frame the Funkhaus may run in and under its real page and CSP, and the
+intermediate fetched back in 64 MiB `Range` slices through the bridge. **The first real run of a
+release is these checks**: install, set up the site, turn the extension on, pair the Mac on the
+Encoder page and upload one ProRes file. The pairing passes the bridge in the frame; the upload
+passes the file in 64 MiB slices and the intermediate back in 64 MiB `Range` slices. A test
+build with a self-test in the frame was built and dropped: any page of the parent's origin
+could have driven it.

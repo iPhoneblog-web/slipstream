@@ -6,6 +6,7 @@ import XCTest
 final class LoopbackTests: XCTestCase {
     private var root: URL!
     private let origin = "safari-web-extension://3B1C2D7E-0000-4000-8000-000000000001"
+    static let site = "https://funkhaus.example.org"
 
     override func setUpWithError() throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent("slipstream-jobs-\(UUID().uuidString)")
@@ -36,12 +37,13 @@ final class LoopbackTests: XCTestCase {
     private func api(_ encoder: @escaping IntermediateEncoder = LoopbackTests.copying, pairing: Pairing = FakePairing()) async throws -> LoopbackAPI {
         let jobs = ProResJobs(root: root, encoder: encoder)
         try await jobs.load()
-        return LoopbackAPI(token: "t0ken", version: "1.0.0", name: "Test-Mac", jobs: jobs, pairing: pairing)
+        return LoopbackAPI(token: "t0ken", version: "1.0.0", name: "Test-Mac", jobs: jobs, pairing: pairing,
+                           site: { LoopbackTests.site })
     }
 
     private func call(_ api: LoopbackAPI, _ method: String, _ path: String, body: Data = Data(),
                       headers: [String: String] = [:]) async -> HTTPResponse {
-        var h = ["Origin": origin, "X-Slipstream-Token": "t0ken"]
+        var h = ["Origin": origin, "X-Slipstream-Token": "t0ken", "X-Slipstream-Site": Self.site]
         h.merge(headers) { $1 }
         // As the parser hands it over: the query apart from the path.
         let parts = path.split(separator: "?", maxSplits: 1).map(String.init)
@@ -90,11 +92,54 @@ final class LoopbackTests: XCTestCase {
         let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying)
         try await jobs.load()
         let a = LoopbackAPI(token: "t0ken", version: "1", name: "Mac", jobs: jobs, pairing: FakePairing(),
+                            site: { LoopbackTests.site },
                             seen: { count.value += 1 })
         _ = await call(a, "GET", "/v1/ping", headers: ["X-Slipstream-Token": "guess"])
         XCTAssertEqual(count.value, 0)
         _ = await call(a, "GET", "/v1/ping")
         XCTAssertEqual(count.value, 1)
+    }
+
+    /// Origin check 3 of docs/traps.md, "Origins": the bridge names the page it serves, and a
+    /// page that is not the configured site gets nothing, even with the right token.
+    func testOnlyTheConfiguredSite() async throws {
+        let a = try await api()
+        let foreign = await call(a, "GET", "/v1/jobs", headers: ["X-Slipstream-Site": "https://evil.example"])
+        XCTAssertEqual(foreign.status, 403)
+        let none = await a.handle(HTTPRequest(method: "GET", path: "/v1/jobs", headers: ["Origin": origin, "X-Slipstream-Token": "t0ken"]))
+        XCTAssertEqual(none.status, 403)
+        let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying)
+        try await jobs.load()
+        let unset = LoopbackAPI(token: "t0ken", version: "1", name: "Mac", jobs: jobs, pairing: FakePairing(), site: { nil })
+        let r = await call(unset, "GET", "/v1/jobs")
+        XCTAssertEqual(r.status, 403)
+        let ok = await call(a, "GET", "/v1/jobs")
+        XCTAssertEqual(ok.status, 200)
+    }
+
+    /// The guard fires: after the site changes, the new site neither lists, reads, writes nor
+    /// deletes the old site's jobs; they stay for the old one.
+    func testJobsBelongToTheirSite() async throws {
+        let box = Box<String?>(LoopbackTests.site)
+        let jobs = ProResJobs(root: root, encoder: LoopbackTests.copying)
+        try await jobs.load()
+        let a = LoopbackAPI(token: "t0ken", version: "1", name: "Mac", jobs: jobs, pairing: FakePairing(), site: { box.value })
+        _ = await call(a, "PUT", "/v1/jobs/old", body: Data(#"{"name":"a.mov","size":4}"#.utf8))
+        _ = await call(a, "PUT", "/v1/jobs/old/source", body: Data([1, 2, 3, 4]), headers: ["Content-Range": "bytes 0-3/4"])
+        _ = try await waitFor(a, "old", phase: "ready")
+
+        let other = "https://other.example.org"
+        box.value = other
+        let h = ["X-Slipstream-Site": other]
+        do { let r = await call(a, "GET", "/v1/jobs", headers: h); XCTAssertEqual(r.body, Data(#"{"jobs":[]}"#.utf8)) }
+        do { let r = await call(a, "GET", "/v1/jobs/old", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "GET", "/v1/jobs/old/intermediate", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "PUT", "/v1/jobs/old/source", body: Data([9]), headers: h.merging(["Content-Range": "bytes 0-0/4"]) { $1 }); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "DELETE", "/v1/jobs/old?reason=cancel", headers: h); XCTAssertEqual(r.status, 404) }
+        do { let r = await call(a, "PUT", "/v1/jobs/old", body: Data(#"{"name":"a.mov","size":4}"#.utf8), headers: h); XCTAssertEqual(r.status, 409) }
+
+        box.value = LoopbackTests.site
+        do { let r = await call(a, "GET", "/v1/jobs/old/intermediate"); XCTAssertEqual(r.status, 206) }
     }
 
     func testPreflightAllowsPrivateNetwork() async throws {

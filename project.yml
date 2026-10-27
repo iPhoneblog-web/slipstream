@@ -3,14 +3,14 @@
 # extension, so the app is an Xcode project; its code that needs no app lives in Package.swift.
 name: Slipstream
 options:
-  bundleIdPrefix: io.github.iphoneblog-web
+  bundleIdPrefix: io.github.kyrios
   deploymentTarget:
     macOS: "14.0"
   developmentLanguage: de
   createIntermediateGroups: true
 settings:
   base:
-    # Thorsten's paid team. Never 2X64N8XML3, the free team his Apple Development certificate
+    # The maintainer's paid team. Never 2X64N8XML3, the free team the Apple Development certificate
     # belongs to (docs/release.md).
     DEVELOPMENT_TEAM: W9N692KH39
     MARKETING_VERSION: "0.0.0"
@@ -49,7 +49,7 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSApplicationCategoryType: public.app-category.video
         LSUIElement: true
-        NSHumanReadableCopyright: iPhoneblog-web
+        NSHumanReadableCopyright: kyrios/slipstream
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
     # xcodegen writes these files from `properties`; without them it writes them empty.
@@ -57,10 +57,10 @@ targets:
       path: App/Slipstream/Slipstream.entitlements
       properties:
         com.apple.security.application-groups:
-          - W9N692KH39.io.github.iphoneblog-web.slipstream
+          - W9N692KH39.io.github.kyrios.slipstream
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kyrios.slipstream
         PRODUCT_NAME: Slipstream
         GENERATE_INFOPLIST_FILE: NO
     dependencies:
@@ -93,10 +93,10 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - W9N692KH39.io.github.iphoneblog-web.slipstream
+          - W9N692KH39.io.github.kyrios.slipstream
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.iphoneblog-web.slipstream.extension
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kyrios.slipstream.extension
         PRODUCT_NAME: Slipstream Extension
         GENERATE_INFOPLIST_FILE: NO
 schemes:

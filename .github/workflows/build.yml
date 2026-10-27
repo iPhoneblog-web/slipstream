@@ -31,6 +31,9 @@ jobs:
           sysctl -n machdep.cpu.brand_string
       - name: Test
         run: swift test
+      # The extension's origin checks (docs/traps.md, "Origins") on the real scripts.
+      - name: Test the extension
+        run: node --test Tests/extension/*.test.mjs
 
   build:
     needs: test

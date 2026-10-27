@@ -28,8 +28,8 @@ public enum Plan {
 
     /// The intermediate's rate (ADR-0007 §8): the 4K rung made from it loses at most 1 VMAF
     /// point (`vmaf_4k_v0.6.1`) against the rung made from the ProRes. 50 Mbit/s lost 0.8 on the
-    /// alpaca clip; Alex's first export decides (bin/rungs.zsh, ADR test 5). One rate for every
-    /// size: the bits only travel to `encoder`, and VideoToolbox takes the same time at any rate.
+    /// alpaca clip; the first real export decides (bin/rungs.zsh). One rate for every
+    /// size: the bits only travel to the server, and VideoToolbox takes the same time at any rate.
     public static let averageBitRate = 50_000_000
 
     /// The size the server would make its top rung: kept aspect, even sides, never upscaled.

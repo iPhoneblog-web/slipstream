@@ -1,5 +1,5 @@
 #!/bin/zsh
-# The intermediate's rate against the 1-point rule (ADR-0007 §8, test 5 in iphoneblog-wordpress):
+# The intermediate's rate against the 1-point rule (docs/encoding.md):
 # encodes a ProRes export into HEVC intermediates with VideoToolbox, the server's kept 4K rung
 # (x265 `slower`, CRF 29, VBV at most 5 Mbit/s) from each intermediate and from the ProRes itself,
 # and scores every file with VMAF against the ProRes in two models: vmaf_4k_v0.6.1, which the

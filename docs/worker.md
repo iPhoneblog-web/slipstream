@@ -3,23 +3,20 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.0`, toolchain 1; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.2`, toolchain 1; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
-**No `--app-version`.** The helper API's `app_version` (helper.yaml 1.1.0) is the worker's own
+**No `--app-version`, but `--host-app-*`.** The helper API's `app_version` is the worker's own
 release, which the queue compares with its `min_app_version`; the worker sends it by itself.
-The API has no field for Slipstream's version, so the queue does not see it; when the queue
-asks for a newer worker, the menu's "Update verfügbar" leads to the Slipstream release that
-embeds one. It is the same program as `encoder`'s own worker. It talks to the queue through its
-own WireGuard tunnel (wireguard-go in userspace); Slipstream only starts it, feeds it, and shows
-what it reports. Without the binary, or before the Mac is paired, the app runs ProRes only.
+Slipstream's own name and version go to `host_app` (helper.yaml 1.1.1, worker `v0.2.1` and later), so the
+queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
 
 ## How the app runs it
 
 ```
 /usr/bin/nice -n 19 encode-worker --key-stdin --tunnel-file <support>/tunnel.conf
-  --state-dir <support>/worker --name <Mac name>
+  --state-dir <support>/worker --name <Mac name> --host-app-name Slipstream --host-app-version <x.y.z>
   --threads N --gpu true|false --jobs N
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
@@ -62,7 +59,7 @@ takes no data in `Contents/Helpers`. `bin/fetch-worker` pins the release by tag 
 
 ## Pairing
 
-The upload center's Encoder page asks the extension for the Mac's name and public key
+The Funkhaus's Encoder page asks the extension for the Mac's name and public key
 (`pairing.identity`), registers the worker with the queue, and hands the tunnel configuration
 back (`pairing.tunnel`). Slipstream writes it as one `eqtunnel1 …` line to `tunnel.conf` and
 restarts the worker. The key pair is made on first use and stays in the login keychain, item

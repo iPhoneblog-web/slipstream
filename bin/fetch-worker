@@ -2,7 +2,7 @@
 # Fetches what Slipstream embeds from kyrios/encode-queue's release: the worker's macOS arm64
 # binary into build/worker/encode-worker, and the macOS arm64 toolchain (ffmpeg, ffprobe,
 # whisper-cli, versions.txt) into build/tools (docs/worker.md, docs/tools.md). One build,
-# encode-queue's, runs on encoder and on the Mac.
+# encode-queue's, runs on the server and on the Mac.
 #
 # The tag and both files' sha256 are pinned here. Anything else fails: a moved tag or a
 # replaced asset stops the build instead of shipping. A new worker is a change to these lines.
@@ -10,9 +10,9 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 repo=kyrios/encode-queue
-tag=v0.2.0
+tag=v0.2.2
 worker=encode-worker-darwin-arm64
-worker_sha256=ac69c0e8d276041e6e555a3ab2fb5ff21dbf51392e26cc4bbbe031ac21d248a3
+worker_sha256=d820bfbcdd0cd09a374d957c44b70d894016a16d4cf52b0bb5ff860b2544a0a5
 toolchain=encode-toolchain-darwin-arm64.tar.gz
 toolchain_sha256=ee98e4a86c1fe18c9acc02f1cb064d1cda869cce6fdeb2c02760351ba65125ae
 

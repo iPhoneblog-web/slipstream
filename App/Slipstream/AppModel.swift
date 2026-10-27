@@ -3,6 +3,16 @@ import Foundation
 import HelperCore
 import os
 
+/// The configured site's origin for the loopback, which reads it off the main thread.
+final class SiteBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    var origin: String? {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
+    }
+}
+
 /// The worker's id for its own callbacks, set once the worker exists.
 private final class WorkerBox: @unchecked Sendable {
     var id: UUID?
@@ -48,6 +58,56 @@ final class AppModel: ObservableObject {
     private let startedAt = Date()
     private let windows = Windows()
 
+    /// The Funkhaus site this Mac works for; nil until the setup window checked one.
+    @Published private(set) var site: SiteConfig?
+    /// The site for the loopback's check, read on its own queue.
+    private let siteBox = SiteBox()
+
+    func showSetup() {
+        windows.show("setup", title: "Slipstream einrichten", size: NSSize(width: 480, height: 260)) {
+            SetupView(model: self)
+        }
+    }
+
+    /// The setup window's check: the host, its `/.well-known/funkhaus.json`, then the app group.
+    func checkSite(_ input: String) async -> String? {
+        let host: String
+        do { host = try SiteConfig.host(from: input) } catch {
+            return (error as? SiteConfig.Problem)?.message ?? error.localizedDescription
+        }
+        guard let wellKnown = SiteConfig.wellKnown(host) else { return SiteConfig.Problem.badHost.message }
+        var request = URLRequest(url: wellKnown, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let data: Data
+        do {
+            let (body, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.url?.host == host.split(separator: ":").first.map(String.init) else {
+                return SiteConfig.Problem.notFunkhaus("keine Antwort unter /.well-known/funkhaus.json").message
+            }
+            data = body
+        } catch {
+            return "\(host) ist nicht erreichbar: \(error.localizedDescription)"
+        }
+        do {
+            let found = try SiteConfig.check(host: host, wellKnown: data, appVersion: version)
+            try found.save(to: Paths.appGroup)
+            setSite(found)
+            log.info("site set up: \(found.host, privacy: .public)")
+            return nil
+        } catch {
+            return (error as? SiteConfig.Problem)?.message ?? error.localizedDescription
+        }
+    }
+
+    private func setSite(_ s: SiteConfig?) {
+        site = s
+        siteBox.origin = s?.origin
+    }
+
+    func openSite() {
+        if let url = site?.url { NSWorkspace.shared.open(url) } else { showSetup() }
+    }
+
     func showSettings() {
         windows.show("settings", title: "Slipstream – Einstellungen", size: NSSize(width: 460, height: 380)) {
             SettingsView(model: self)
@@ -65,10 +125,7 @@ final class AppModel: ObservableObject {
         if extensionSeen.map({ at > $0 }) ?? true { extensionSeen = at }
     }
 
-    /// The old address on purpose: funkhaus.iphoneblog.de has no DNS yet, and this one keeps
-    /// working after the move as a redirect.
-    static let uploadCenter = URL(string: "https://upload.iphoneblog.de/")!
-    static let releases = URL(string: "https://github.com/iPhoneblog-web/slipstream/releases/latest")!
+    static let releases = URL(string: "https://github.com/kyrios/slipstream/releases/latest")!
 
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
     private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "app")
@@ -98,6 +155,9 @@ final class AppModel: ObservableObject {
     // MARK: - Start
 
     func start() {
+        setSite(SiteConfig.load(from: Paths.appGroup))
+        // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).
+        if site == nil { showSetup() }
         pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
         if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
             finishedToday = defaults.integer(forKey: "todayCount")
@@ -136,7 +196,9 @@ final class AppModel: ObservableObject {
         let pairing = AppPairing { [weak self] _ in
             await MainActor.run { self?.restartWorker() }
         }
+        let box = siteBox
         let api = LoopbackAPI(token: token, version: version, name: AppPairing.macName, jobs: jobs, pairing: pairing,
+                              site: { box.origin },
                               seen: { Task { @MainActor [weak self] in self?.markExtensionSeen() } })
         let server = LoopbackServer(api: api)
         let port = try await server.start()
@@ -168,7 +230,7 @@ final class AppModel: ObservableObject {
                 Task { @MainActor [weak self] in self?.workerExited(id: box.id, status) }
             })
             box.id = worker.id
-            try worker.start(key: key, limits: limits)
+            try worker.start(key: key, limits: limits, version: version)
             self.worker = worker
             connection = .down
             if let until = pausedUntil { worker.send(.pause(until: until)) }

@@ -68,6 +68,9 @@ enum KeyStore {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
         }
         let key = WireGuardKey.generate()
+        // A tunnel configured for another key (an older build under another bundle id shares
+        // this folder) cannot work with the new one: it goes, and the Mac is paired again.
+        try? FileManager.default.removeItem(at: Paths.tunnel)
         let add: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                   kSecAttrAccount as String: account, kSecValueData as String: key.privateKey,
                                   kSecAttrLabel as String: "Slipstream WireGuard",

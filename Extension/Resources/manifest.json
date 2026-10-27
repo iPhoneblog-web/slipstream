@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Slipstream",
   "version": "0.0.0",
-  "description": "Verbindet das Funkhaus mit Slipstream auf diesem Mac: ProRes wird hier umgewandelt, bevor es hochlädt.",
+  "description": "Verbindet deine Funkhaus-Seite mit Slipstream auf diesem Mac: ProRes wird hier umgewandelt, bevor es hochlädt. Antwortet nur auf der Seite, die in Slipstream eingerichtet ist.",
   "icons": {
     "48": "icon-48.png",
     "96": "icon-96.png",
@@ -10,23 +10,36 @@
     "256": "icon-256.png",
     "512": "icon-512.png"
   },
-  "permissions": ["nativeMessaging"],
-  "host_permissions": ["http://127.0.0.1/*"],
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://funkhaus.iphoneblog.de/*", "https://upload.iphoneblog.de/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "all_frames": true,
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["bridge.html", "bridge.js"],
-      "matches": ["https://funkhaus.iphoneblog.de/*", "https://upload.iphoneblog.de/*"]
+      "resources": [
+        "bridge.html",
+        "bridge.js"
+      ],
+      "matches": [
+        "https://*/*"
+      ]
     }
   ]
 }

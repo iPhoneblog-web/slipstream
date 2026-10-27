@@ -1,15 +1,18 @@
 import Foundation
 
 /// The names the app, its Safari extension and the log share. Lowercase: Safari checks the
-/// extension's bundle id against the app's as a prefix, and a capital letter broke that in the
-/// test of ADR-0007 (docs/traps.md).
+/// extension's bundle id against the app's as a prefix, and a capital letter broke that once
+/// (docs/traps.md).
 public enum SlipstreamIDs {
-    public static let bundle = "io.github.iphoneblog-web.slipstream"
-    public static let extensionBundle = "io.github.iphoneblog-web.slipstream.extension"
+    public static let bundle = "io.github.kyrios.slipstream"
+    public static let extensionBundle = "io.github.kyrios.slipstream.extension"
     /// The app group both read: the app writes `loopbackFile` into it, the extension reads it.
     /// Team-prefixed, so a Developer ID app needs no provisioning profile for it.
-    public static let appGroup = "W9N692KH39.io.github.iphoneblog-web.slipstream"
+    public static let appGroup = "W9N692KH39.io.github.kyrios.slipstream"
     public static let loopbackFile = "loopback.json"
+    /// The Funkhaus site this Mac works for (`SiteConfig`), set up at first launch. The app
+    /// writes it; the extension reads it and answers on that site only.
+    public static let siteFile = "site.json"
     /// Touched by the app extension at every presence check and launch, so the app can tell
     /// whether Safari's extension reaches it (the menu's "Safari-Extension" line).
     public static let extensionSeenFile = "extension-seen"
