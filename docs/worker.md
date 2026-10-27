@@ -27,8 +27,8 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
 `<support>` is `~/Library/Application Support/Slipstream`. Its environment is the app's, with
 `FONTCONFIG_FILE` at `Resources/fonts/fonts.conf`, `XDG_CACHE_HOME` at
 `~/Library/Caches/io.github.kyrios.slipstream` and `Contents/Helpers` first on `PATH`
-([tools.md](tools.md), "Captions"). It starts only when `tunnel.conf` exists (pairing wrote it)
-and starts again 10 s after it exits.
+([tools.md](tools.md), "Captions"). It starts only when `tunnel.conf` exists (pairing wrote it);
+when it stops, see "When the worker stops" below.
 
 **Standard input:** the first line is the WireGuard private key, base64, from the keychain.
 After it, one JSON object per line:
@@ -54,7 +54,30 @@ After it, one JSON object per line:
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason` | Settings → Leistung, "Whisper-Modelle" |
 
-Its standard error goes to the log window and to the unified log.
+Its standard error goes to the log window, to the unified log (info level, which macOS does not
+keep) and to `~/Library/Logs/Slipstream/worker.log`.
+
+## When the worker stops
+
+Up to 1.3.1 the app started a stopped worker again every 10 s for ever, said only "Keine
+Verbindung zum Encoder", and kept its standard error nowhere on disk; a start that failed was
+never tried again. A Mac Studio took no jobs and left no trace of why. Now:
+
+- **The menu says why**: "Encoder gestoppt: <reason>, neuer Versuch <time>". The reason
+  (`HelperCore.WorkerExit`) is the worker's last word on standard error: a Go `panic:` line, else
+  its `encode-worker: …` line, else its last line; and how it ended (`Status N`, or `Signal N`
+  with its name). The app reads standard error to its end, at most 2 s, before it decides, so a
+  panic's text is there. The line goes as soon as a new worker sends any event.
+- **It starts again with backoff** (`HelperCore.WorkerRestart`): 10 s after the first stop,
+  doubling to at most 10 min while stops follow each other; a worker that ran 5 min or more
+  starts the count again. A start that fails (the keychain, the process) counts as a stop and is
+  tried again the same way. A new pairing starts at once and at the start of the count.
+- **The log file**, `~/Library/Logs/Slipstream/worker.log` (`WorkerLog`, `HelperCore.RotatingLog`):
+  every line of the worker's standard error and of a job's `log` events, and the app's own lines
+  ("slipstream: worker started, pid …", "slipstream: worker stopped after … s: …"), each with
+  the time. At 5 MB it moves to `worker.log.1`. The log window shows its path and "Im Finder
+  zeigen". The app's lines also go to the unified log at notice level, which macOS keeps:
+  `log show --last 1d --predicate 'subsystem == "io.github.kyrios.slipstream"'`.
 
 encode-queue implements this contract from `v0.1.0` on (its `worker-control.yaml`). It sends
 `job` at every phase change and once a second. whisper.cpp's version comes with

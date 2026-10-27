@@ -39,7 +39,11 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   nur für Aufträge des Encoders, nie für ProRes.
 - **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
   auch nach einem Neustart. Die genaue Zahl steht in den Einstellungen.
-- **Protokoll anzeigen …**, wenn etwas komisch aussieht.
+- **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
+  `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
+- **Encoder gestoppt: …** sagt, warum der Encoder-Teil von Slipstream gerade nicht läuft, und
+  wann Slipstream ihn wieder startet (erst nach 10 Sekunden, bei wiederholtem Stopp seltener,
+  höchstens alle 10 Minuten). ProRes für das Funkhaus geht trotzdem.
 - **Verbindung:** Tunnel verbunden oder getrennt. „Nicht gekoppelt (nur ProRes)“ ist normal auf
   einem Mac, der nur ProRes umwandelt.
 - **Safari-Extension:** „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
@@ -78,5 +82,5 @@ ein, solange Slipstream einen Auftrag hat.
   Neu aus Final Cut exportieren.
 - **„Auf dem Mac ist kein Platz mehr frei.“**: Platz schaffen; 10 Minuten 4K brauchen etwa
   50 GB für die Kopie und 4 GB für das Ergebnis.
-- Alles andere: ein [Issue](../../../issues) öffnen, mit einem Bildschirmfoto und den Zeilen aus
-  „Protokoll anzeigen“.
+- Alles andere: ein [Issue](../../../issues) öffnen, mit einem Bildschirmfoto und der Datei
+  `~/Library/Logs/Slipstream/worker.log` (Protokoll anzeigen → Im Finder zeigen).

@@ -88,6 +88,8 @@ final class MenuMirror: ObservableObject {
             l.state = "Pausiert"
         } else if m.proresJob != nil || m.queueJob != nil {
             l.state = "Wandelt um"
+        } else if m.workerStopped != nil {
+            l.state = "Encoder gestoppt"
         } else {
             switch m.connection {
             case .up: l.state = "Bereit"
@@ -113,6 +115,11 @@ final class MenuMirror: ObservableObject {
         case .noWorker: l.connection = "Ohne Worker (nur ProRes)"
         case .down: l.connection = "Tunnel getrennt" + last
         case .up: l.connection = "Tunnel verbunden" + last
+        }
+        if let reason = m.workerStopped {
+            // The full reason is in the log window and the log file.
+            let short = reason.count > 90 ? String(reason.prefix(89)) + "…" : reason
+            l.connection = "Encoder gestoppt: \(short)" + (m.workerNextStart.map { ", neuer Versuch \(time($0))" } ?? "")
         }
         if let seen = m.extensionSeen {
             l.extensionLines = ["Safari-Extension: verbunden, zuletzt \(time(seen))"]
