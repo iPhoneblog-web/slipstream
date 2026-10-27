@@ -47,6 +47,41 @@ The content script answers on the same window, with the same `id` in `re`:
 - A page may say `hello` again at any time (after the user starts Slipstream, say). Each answer
   with `present: true` carries a new port; the page drops the old one.
 
+**The three states** the hello tells apart, for the upload center's banner on a Mac in Safari:
+
+| hello | state | the banner |
+|---|---|---|
+| no answer within 1 s | the extension is missing or turned off | install Slipstream, turn the extension on |
+| `helper.present: false` | the extension runs, the app does not | "Slipstream starten" (`launch`, below) |
+| `helper.present: true` | both run | none |
+
+### Launch: "Slipstream starten" (since 1.0.1)
+
+```js
+window.postMessage({ slipstream: 1, type: "launch", id: "l1" }, location.origin);
+```
+
+The extension's app extension starts the app it sits in, in the background and without a
+prompt, and answers once the app's loopback is up, after at most about 10 s:
+
+```js
+{ slipstream: 1, type: "launch", re: "l1", ok: true, launched: true,
+  helper: { present: true, version: "1.0.1", name: "Alex’ MacBook Pro" } }
+// it already ran: launched false
+{ slipstream: 1, type: "launch", re: "l1", ok: true, launched: false, helper: { present: true, … } }
+// it did not come up
+{ slipstream: 1, type: "launch", re: "l1", ok: false, launched: false,
+  helper: { present: false, reason: "not-running" },
+  error: { code: "launch-failed", message: "Slipstream ließ sich nicht starten. (…)" } }
+```
+
+- No port travels with it: on `ok: true` the page says `hello` again and gets its port there.
+- Allow 12 s for the answer. An extension older than 1.0.1 never answers `launch`; the page
+  then sends the user to the release page instead.
+- It is a message, not a URL scheme: the extension already reaches the app extension by
+  native messaging, which starts the app with no Safari prompt and reports whether it came up; a
+  `slipstream://` link would ask the user each time and could not tell the page anything.
+
 ## 2. The port: requests, answers, events
 
 Everything else goes over the `MessagePort` from the hello. `File` and `Blob` objects pass as
@@ -124,6 +159,7 @@ until `job.finish` or `job.cancel`, and deletes anything older than 7 days.
 | `not-a-video`, `cannot-decode`, `check-failed` | the encode failed: the file, its codec, or Slipstream's check of the result (ProRes Drop's checks) |
 | `disk-full` | no room for the copy or the intermediate |
 | `not-paired` | `pairing.tunnel` without a key (Slipstream lost its keychain item) |
+| `launch-failed` | `launch` could not start the app, or it did not come up within about 10 s (section 1) |
 | `internal` | anything else; `message` says what |
 
 ## 3. The bridge and the helper (inside Slipstream; the page never calls this)
