@@ -29,13 +29,29 @@ final class WorkerProcess: @unchecked Sendable {
         self.onExit = onExit
     }
 
+    /// Whether the embedded worker takes a flag, read once from its usage.
+    static func takes(_ flag: String) -> Bool { usage.map { WorkerFlags.supports(flag, usage: $0) } ?? false }
+
+    private static let usage: String? = {
+        let p = Process()
+        p.executableURL = Paths.helper("encode-worker")
+        p.arguments = ["-h"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = out
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
+    }()
+
     static var isPresent: Bool { FileManager.default.isExecutableFile(atPath: Paths.helper("encode-worker").path) }
 
     func start(key: WireGuardKey, limits: Limits, version: String) throws {
         try FileManager.default.createDirectory(at: Paths.workerState, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: Paths.models, withIntermediateDirectories: true)
         process.executableURL = URL(fileURLWithPath: "/usr/bin/nice")
-        process.arguments = [
+        var arguments: [String] = [
             "-n", "19", Paths.helper("encode-worker").path,
             "--key-stdin", "--tunnel-file", Paths.tunnel.path, "--state-dir", Paths.workerState.path,
             // No --app-version: the helper API's app_version is the worker's own release, which
@@ -47,7 +63,14 @@ final class WorkerProcess: @unchecked Sendable {
             "--ffmpeg", Paths.helper("ffmpeg").path, "--ffprobe", Paths.helper("ffprobe").path,
             "--whisper-cli", Paths.helper("whisper-cli").path, "--whisper-models", Paths.models.path,
             "--control", "stdio",
-        ] + (Paths.whisperVersion.map { ["--whisper-version", $0] } ?? [])
+        ]
+        if let v = Paths.whisperVersion { arguments += ["--whisper-version", v] }
+        // v0.2.8 on: every tool version (libass too) from Resources/versions.txt, since codesign
+        // allows no versions.txt beside ffmpeg (docs/tools.md, "Captions").
+        if let file = Paths.toolVersionsFile, Self.takes("toolchain-versions") {
+            arguments += ["--toolchain-versions", file.path]
+        }
+        process.arguments = arguments
         // The toolchain's fonts for libass and its fc-list first on PATH (docs/tools.md,
         // "Captions"); the worker would look for the fonts beside ffmpeg, outside Resources.
         process.environment = WorkerEnvironment.make(

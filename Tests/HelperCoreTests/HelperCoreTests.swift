@@ -187,6 +187,16 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual(bare["PATH"], "/H:/usr/bin:/bin:/usr/sbin:/sbin")
     }
 
+    func testFlags() {
+        let v027 = "usage: encode-worker [flags]\n\n  -whisper-version string\n    \twhisper.cpp's release, if no versions.txt is beside whisper-cli\n"
+        let v028 = v027 + "  -toolchain-versions string\n    \tthe toolchain's versions.txt\n"
+        XCTAssertFalse(WorkerFlags.supports("toolchain-versions", usage: v027))
+        XCTAssertTrue(WorkerFlags.supports("toolchain-versions", usage: v028))
+        XCTAssertTrue(WorkerFlags.supports("whisper-version", usage: v027))
+        // A word in a description is no flag.
+        XCTAssertFalse(WorkerFlags.supports("versions", usage: v028))
+    }
+
     func testLineBuffer() {
         var b = LineBuffer()
         XCTAssertEqual(b.append(Data("a\nb".utf8)), ["a"])

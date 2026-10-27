@@ -7,10 +7,9 @@ Open work, most important first. Delete an item when it is done.
   upload inside the frame the Funkhaus runs in. Record there what it showed, and in
   [extension-protocol.md](extension-protocol.md) whether the Funkhaus's CSP needs
   `frame-src safari-web-extension:`.
-- **Caption jobs on a Mac**: encode-worker reads libass's version only from a `versions.txt`
-  beside ffmpeg, which a signed bundle cannot hold ([tools.md](tools.md), "Captions"). When
-  encode-queue adds a flag for the versions file, pass `Contents/Resources/versions.txt` and
-  check that the worker's `tools` lists libass 0.17.5.
+- **Embed encode-queue v0.2.8** when it is tagged: its worker takes `--toolchain-versions`,
+  which the app already passes when the worker lists it ([tools.md](tools.md), "Captions").
+  Pin it in `bin/fetch-worker` and check that `encode-worker versions` lists libass 0.17.5.
 - **Look at Settings → Leistung once on a paired Mac**: the whisper models as the worker reports
   them, a download's progress, the disk use.
 - **A new Developer ID certificate before 2027-02-01**, when the current one ends with Apple's G1

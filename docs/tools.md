@@ -28,10 +28,11 @@ Linux and macOS, so a Mac burns in the same captions as the server. `fonts/` hol
 worker lists fonts with the toolchain's `fc-list` (`HelperCore/WorkerProtocol.swift`,
 `WorkerEnvironment`). `bin/package` refuses a worker without `fc-list` and `fonts/`.
 
-**Open:** encode-worker `v0.2.7` reads libass's version only from a `versions.txt` beside
-ffmpeg, where codesign allows no data; so a Mac reports no libass and the queue gives it no
-caption job, though its ffmpeg renders them. It needs a worker flag for the versions file, as
-`--whisper-version` is for whisper.cpp (docs/TODO.md).
+**libass's version** comes from `versions.txt`, which the worker looks for beside ffmpeg, where
+codesign allows no data. From encode-queue `v0.2.8` the worker takes
+`--toolchain-versions <Resources>/versions.txt` and reads every version from it; the app passes
+the flag only when the worker's `-h` lists it. Worker `v0.2.7` reports no libass, so the queue
+gives the Mac no caption job, though its ffmpeg renders them (docs/TODO.md).
 
 - **When encode-queue's toolchain changes**, a new Slipstream embeds it. Until then the queue
   gives the Macs no rungs, and the menu says which tool differs.

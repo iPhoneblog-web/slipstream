@@ -106,6 +106,14 @@ public struct WorkerJob: Codable, Equatable, Sendable {
     public var etaS: Int?
 }
 
+/// Which flags the embedded worker takes, from its `-h` usage, so the app passes a newer flag
+/// only to a worker that knows it (an unknown flag stops a Go worker at start).
+public enum WorkerFlags {
+    public static func supports(_ flag: String, usage: String) -> Bool {
+        usage.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("-\(flag) ") || $0.trimmingCharacters(in: .whitespaces) == "-\(flag)" }
+    }
+}
+
 /// The worker's environment: the app's, with the toolchain's fonts for libass (`FONTCONFIG_FILE`,
 /// unless already set, as the worker itself would), fontconfig's cache under `cache`, and the
 /// app's helpers first on `PATH`, so the worker finds the toolchain's `fc-list` before any other.

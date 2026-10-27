@@ -21,6 +21,7 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
   --whisper-version <from Resources/versions.txt>
+  --toolchain-versions <Resources>/versions.txt   (only when the worker's -h lists it, v0.2.8 on)
 ```
 
 `<support>` is `~/Library/Application Support/Slipstream`. Its environment is the app's, with
