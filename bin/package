@@ -120,6 +120,7 @@ codesign -d --entitlements - --xml "$appex" 2>/dev/null | grep -q com.apple.secu
 # them from its defaults).
 [[ $(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist") == com.apple.Safari.web-extension ]]
 [[ $(plutil -extract LSUIElement raw "$app/Contents/Info.plist") == true ]]
+[[ $(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Contents/Info.plist") == slipstream ]]
 # Updates: Sparkle's feed and its public key. REQUIRE_UPDATES=1 (CI on a tag) refuses a release
 # without the key: it could never update itself.
 plutil -extract SUFeedURL raw "$app/Contents/Info.plist" >/dev/null

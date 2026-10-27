@@ -41,7 +41,9 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    Funkhaus speaking a protocol this version knows. Until then the menu offers only
    **Einrichten …**. Settings can change the site later. **Bei der Anmeldung starten**, on by
    default, makes Slipstream a login item; Settings and System Settings → General → Login Items
-   can turn it off.
+   can turn it off. A Funkhaus that offers **In Slipstream verbinden** fills in its host by
+   itself: the link (`slipstream://connect?site=<host>`, [docs/funkhaus-api.md](docs/funkhaus-api.md),
+   "Connect link") runs the same check and asks "Mit … verbinden?" before it keeps anything.
 3. **Quit Safari with ⌘Q and open it again**, after installing and after every update: a Safari
    that was running before keeps the old extension, and the Funkhaus then gets no answer.
 4. **Turn the extension on.** Safari → Settings → Extensions → tick **Slipstream**. Safari says

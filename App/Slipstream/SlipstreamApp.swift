@@ -65,6 +65,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// `slipstream://connect?site=<host>` from a Funkhaus page, also as the app's first launch:
+    /// the setup window checks the host and asks before it keeps it.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme?.lowercased() == ConnectLink.scheme {
+            model.open(url)
+        }
+    }
+
     /// Quit while encoding asks first, and gives the job back (ADR-0007 §9).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if model.quitting { return .terminateNow }
@@ -358,6 +366,8 @@ struct SetupView: View {
     @State private var problem: String?
     @State private var busy = false
     @State private var atLogin = true
+    /// A site a connect link named, checked, waiting for the user's yes.
+    @State private var confirm: SiteConfig?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -368,6 +378,7 @@ struct SetupView: View {
             TextField("funkhaus.example.org", text: $host)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { check() }
+                .onChange(of: host) { if host != confirm?.host { confirm = nil } }
             Toggle("Bei der Anmeldung starten", isOn: $atLogin)
             if let problem {
                 Text(problem).font(.callout).foregroundStyle(.red)
@@ -379,12 +390,27 @@ struct SetupView: View {
             Text("Nach dem Installieren oder einem Update: Safari mit ⌘Q beenden und neu öffnen, sonst sieht Safari die Extension nicht.")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                if busy { ProgressView().controlSize(.small) }
-                Button("Prüfen und speichern") { check() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(busy || host.trimmingCharacters(in: .whitespaces).isEmpty)
+            if let confirm {
+                // A connect link: any website can send one, so nothing is kept before this click.
+                Text("Mit \(confirm.name) (\(confirm.host)) verbinden?").font(.headline)
+                Text("Ein Link hat Slipstream geöffnet. Verbinde nur, wenn du diesem Funkhaus vertraust: Es bekommt deine ProRes-Dateien und kann diesen Mac als Encoder nutzen.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Abbrechen") { self.confirm = nil; NSApp.keyWindow?.close() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Verbinden") { keep(confirm) }
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    if busy { ProgressView().controlSize(.small) }
+                    Button("Prüfen und speichern") { check() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(busy || host.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
         .padding(20)
@@ -394,19 +420,51 @@ struct SetupView: View {
             // A first setup starts at login by default; setting up another Funkhaus shows how it is.
             if model.site != nil { atLogin = LoginItem.isOn }
         }
+        .task(id: model.connectRequest?.id) { await connect() }
+    }
+
+    /// A connect link: the host into the field, the usual check, then the question.
+    private func connect() async {
+        guard let request = model.takeConnectRequest() else { return }
+        confirm = nil
+        problem = request.problem
+        guard let linked = request.host else { return }
+        host = linked
+        busy = true
+        switch await model.lookUpSite(linked) {
+        case .failure(let p): problem = p.message
+        case .success(let found): confirm = found
+        }
+        busy = false
     }
 
     private func check() {
         busy = true
         problem = nil
+        let before = model.site?.host
         Task {
             problem = await model.checkSite(host)
             busy = false
-            if problem == nil {
-                LoginItem.set(atLogin)
-                NSApp.keyWindow?.close()
-            }
+            if problem == nil { done(before) }
         }
+    }
+
+    private func keep(_ found: SiteConfig) {
+        let before = model.site?.host
+        problem = model.saveSite(found)
+        confirm = nil
+        if problem == nil { done(before) }
+    }
+
+    /// Saved: the login item, the window closed, and when the Funkhaus changed, Safari's restart.
+    private func done(_ before: String?) {
+        LoginItem.set(atLogin)
+        NSApp.keyWindow?.close()
+        guard let before, let site = model.site, site.host != before else { return }
+        let alert = NSAlert()
+        alert.messageText = "Safari mit ⌘Q beenden und neu öffnen"
+        alert.informativeText = "Slipstream arbeitet jetzt für \(site.name) (\(site.host)). Erst nach einem Neustart von Safari antwortet die Extension dort zuverlässig."
+        alert.runModal()
     }
 }
 

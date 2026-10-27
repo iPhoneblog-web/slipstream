@@ -72,35 +72,81 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// A connect link (`slipstream://connect?site=<host>`) for the setup window, which checks the
+    /// host and asks before it saves anything (docs/funkhaus-api.md, "Connect link").
+    struct ConnectRequest: Equatable {
+        let id = UUID()
+        var host: String?
+        var problem: String?
+    }
+
+    @Published private(set) var connectRequest: ConnectRequest?
+
+    /// The setup window took the link; reopening the window does not check it again.
+    func takeConnectRequest() -> ConnectRequest? {
+        defer { connectRequest = nil }
+        return connectRequest
+    }
+
+    func open(_ url: URL) {
+        do {
+            let host = try ConnectLink.host(from: url)
+            log.notice("connect link: \(host, privacy: .public)")
+            connectRequest = ConnectRequest(host: host)
+        } catch {
+            log.notice("connect link refused: \(url.absoluteString, privacy: .public)")
+            connectRequest = ConnectRequest(problem: (error as? ConnectLink.Problem)?.message ?? error.localizedDescription)
+        }
+        showSetup()
+    }
+
     /// The setup window's check: the host, its `/.well-known/funkhaus.json`, then the app group.
     func checkSite(_ input: String) async -> String? {
+        switch await lookUpSite(input) {
+        case .failure(let problem): return problem.message
+        case .success(let found): return saveSite(found)
+        }
+    }
+
+    struct SetupProblem: Error { let message: String }
+
+    /// The host and its `/.well-known/funkhaus.json`, checked; nothing saved.
+    func lookUpSite(_ input: String) async -> Result<SiteConfig, SetupProblem> {
         let host: String
         do { host = try SiteConfig.host(from: input) } catch {
-            return (error as? SiteConfig.Problem)?.message ?? error.localizedDescription
+            return .failure(SetupProblem(message: (error as? SiteConfig.Problem)?.message ?? error.localizedDescription))
         }
-        guard let wellKnown = SiteConfig.wellKnown(host) else { return SiteConfig.Problem.badHost.message }
+        guard let wellKnown = SiteConfig.wellKnown(host) else { return .failure(SetupProblem(message: SiteConfig.Problem.badHost.message)) }
         var request = URLRequest(url: wellKnown, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let data: Data
         do {
             let (body, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200, response.url?.host == host.split(separator: ":").first.map(String.init) else {
-                return SiteConfig.Problem.notFunkhaus("keine Antwort unter /.well-known/funkhaus.json").message
+                return .failure(SetupProblem(message: SiteConfig.Problem.notFunkhaus("keine Antwort unter /.well-known/funkhaus.json").message))
             }
             data = body
         } catch {
             log.info("setup: \(host, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return SiteConfig.unreachable(host, (error as? URLError)?.code)
+            return .failure(SetupProblem(message: SiteConfig.unreachable(host, (error as? URLError)?.code)))
         }
         do {
-            let found = try SiteConfig.check(host: host, wellKnown: data, appVersion: version)
-            try found.save(to: Paths.appGroup)
-            setSite(found)
-            log.info("site set up: \(found.host, privacy: .public)")
-            return nil
+            return .success(try SiteConfig.check(host: host, wellKnown: data, appVersion: version))
         } catch {
-            return (error as? SiteConfig.Problem)?.message ?? error.localizedDescription
+            return .failure(SetupProblem(message: (error as? SiteConfig.Problem)?.message ?? error.localizedDescription))
         }
+    }
+
+    /// Keeps a checked site: the app group file the extension reads, then the model.
+    func saveSite(_ found: SiteConfig) -> String? {
+        do {
+            try found.save(to: Paths.appGroup)
+        } catch {
+            return error.localizedDescription
+        }
+        setSite(found)
+        log.info("site set up: \(found.host, privacy: .public)")
+        return nil
     }
 
     private func setSite(_ s: SiteConfig?) {

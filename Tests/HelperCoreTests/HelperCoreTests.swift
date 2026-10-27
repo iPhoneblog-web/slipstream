@@ -275,3 +275,42 @@ final class UnreachableTests: XCTestCase {
         XCTAssertEqual(SiteConfig.unreachable("a.b", nil), "a.b ist nicht erreichbar.")
     }
 }
+
+final class ConnectLinkTests: XCTestCase {
+    private func host(_ s: String) throws -> String { try ConnectLink.host(from: URL(string: s)!) }
+
+    func testHost() throws {
+        XCTAssertEqual(try host("slipstream://connect?site=funkhaus.example.org"), "funkhaus.example.org")
+        XCTAssertEqual(try host("SLIPSTREAM://Connect?site=Funkhaus.Example.org"), "funkhaus.example.org")
+        XCTAssertEqual(try host("slipstream://connect/?site=funkhaus.example.org:8443"), "funkhaus.example.org:8443")
+        // The port as the setup field writes it.
+        XCTAssertEqual(try host("slipstream://connect?site=funkhaus.example.org:443"), "funkhaus.example.org")
+    }
+
+    func testNotConnect() {
+        for s in ["https://connect?site=funkhaus.example.org",            // another scheme
+                  "slipstream://pair?site=funkhaus.example.org",          // another action
+                  "slipstream://connect",                                  // no site
+                  "slipstream://connect?host=funkhaus.example.org",       // another parameter
+                  "slipstream://connect?site=a.example.org&site=b.example.org",
+                  "slipstream://connect?site=funkhaus.example.org&token=x", // an extra parameter
+                  "slipstream://connect/path?site=funkhaus.example.org",
+                  "slipstream://user@connect?site=funkhaus.example.org",
+                  "slipstream://connect?site=funkhaus.example.org#frag"] {
+            XCTAssertThrowsError(try host(s), s) { XCTAssertEqual($0 as? ConnectLink.Problem, .notConnect, s) }
+        }
+    }
+
+    func testBadHosts() {
+        for s in ["slipstream://connect?site=",
+                  "slipstream://connect?site=localhost",                          // no dot
+                  "slipstream://connect?site=https://funkhaus.example.org",       // a URL, not a host
+                  "slipstream://connect?site=funkhaus.example.org/upload",
+                  "slipstream://connect?site=evil.example@funkhaus.example.org",
+                  "slipstream://connect?site=funkhaus.example.org:99999",
+                  "slipstream://connect?site=funk%20haus.example.org",
+                  "slipstream://connect?site=xn--fnkhaus.example.org%2F"] {
+            XCTAssertThrowsError(try host(s), s) { XCTAssertEqual($0 as? ConnectLink.Problem, .badHost, s) }
+        }
+    }
+}

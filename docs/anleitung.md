@@ -4,6 +4,17 @@ Slipstream wandelt ProRes-Dateien, die du ins Funkhaus ziehst, auf deinem Mac um
 sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
 Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#install).
 
+## Mit dem Funkhaus verbinden
+
+- Bietet das Funkhaus **In Slipstream verbinden** an: anklicken. Slipstream öffnet sich, prüft
+  das Funkhaus und fragt „Mit … verbinden?“. Nur **Verbinden** speichert es; ein Link allein
+  richtet nichts ein, denn jede Website kann ihn schicken. Verbinde nur mit einem Funkhaus, dem
+  du vertraust.
+- Sonst: beim ersten Start den Hostnamen eintippen, etwa `funkhaus.example.org`, und **Prüfen
+  und speichern**.
+- Ein anderes Funkhaus geht genauso, per Link oder in Einstellungen → Funkhaus. Danach Safari
+  mit ⌘Q beenden und neu öffnen. Die Kopplung bleibt.
+
 ## ProRes hochladen
 
 - In Final Cut wie gewohnt als ProRes exportieren und die Datei ins Funkhaus ziehen, wie
