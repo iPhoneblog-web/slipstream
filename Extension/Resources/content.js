@@ -21,6 +21,27 @@
     return bridge;
   }
 
+  // The page's "Slipstream starten" (docs/extension-protocol.md, section 1): the app extension
+  // starts the app; the answer says whether it runs now. The page then says hello again.
+  window.addEventListener("message", async (ev) => {
+    const d = ev.data;
+    if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "launch" || d.re !== undefined) return;
+    let r;
+    try {
+      r = await browser.runtime.sendMessage({ type: "launch" });
+    } catch (e) {
+      r = { present: false, launched: false, reason: "not-running", error: String(e) };
+    }
+    const helper = r && r.present ? { present: true, version: r.version, name: r.name }
+                                  : { present: false, reason: (r && r.reason) || "not-running" };
+    const ok = !!(r && r.present);
+    window.postMessage(ok
+      ? { slipstream: 1, type: "launch", re: d.id, ok: true, launched: !!r.launched, helper }
+      : { slipstream: 1, type: "launch", re: d.id, ok: false, launched: !!(r && r.launched), helper,
+          error: { code: "launch-failed", message: "Slipstream ließ sich nicht starten." + (r && r.error ? " (" + r.error + ")" : "") } },
+      location.origin);
+  });
+
   window.addEventListener("message", async (ev) => {
     const d = ev.data;
     if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "hello" || d.re !== undefined) return;

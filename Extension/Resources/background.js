@@ -22,6 +22,15 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       : { present: false, reason: r.reason }));
     return true;
   }
+  if (msg.type === "launch") {
+    // The app extension starts the app it sits in, and answers once its loopback is up.
+    browser.runtime.sendNativeMessage(APP, { type: "launch" })
+      .then((r) => sendResponse(r && r.present
+        ? { present: true, launched: !!r.launched, version: r.version, name: r.name }
+        : { present: false, launched: !!(r && r.launched), reason: (r && r.reason) || "not-running", error: r && r.error }))
+      .catch((e) => sendResponse({ present: false, launched: false, reason: "not-running", error: String(e) }));
+    return true;
+  }
   if (msg.type === "loopback") {
     // Only the bridge, the extension's own page, learns the port and the token.
     if (!sender.url || !sender.url.startsWith(bridgeURL)) { sendResponse(null); return; }

@@ -38,9 +38,10 @@ ein, solange Slipstream einen Auftrag hat.
 
 ## Wenn etwas schiefgeht
 
-- **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream läuft nicht (kein Symbol
-  in der Menüleiste) oder die Extension ist aus (Safari → Einstellungen → Erweiterungen). Dann
-  die Seite neu laden.
+- **Das Upload-Center zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
+  Ein Klick darauf startet sie im Hintergrund.
+- **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert oder
+  die Extension ist aus (Safari → Einstellungen → Erweiterungen). Dann die Seite neu laden.
 - **„Das ist keine Videodatei.“** oder **„Dieses Videoformat (…) kann der Mac nicht lesen.“**:
   Neu aus Final Cut exportieren.
 - **„Auf dem Mac ist kein Platz mehr frei.“**: Platz schaffen; 10 Minuten 4K brauchen etwa
