@@ -20,8 +20,20 @@ libass, so a Mac announces no fonts and gets no jobs with burnt-in captions.
   gives the Macs no rungs, and the menu says which tool differs.
 - **A parity test decides** whether a Mac's rung equals the server's: the same clip, the same rung,
   size within 1 %, SSIM and PSNR within 0.1.
-- **Licence:** ffmpeg with x264 and x265 is GPL v2 or later; encode-queue's release names its
-  sources.
+- **Licences:** see "Licences" below.
 - The whisper models are not in the app. The app gives the worker the folder
   `~/Library/Application Support/Slipstream/models`; how a model gets there is the worker's
   business ([worker.md](worker.md)).
+
+## Licences
+
+**ffmpeg and ffprobe are GPLv3**: encode-queue builds them with `--enable-gpl --enable-version3`,
+linked with x264 and x265 (GPLv2 or later), LAME (LGPL) and libvmaf (BSD-2-Clause-Patent);
+whisper-cli is MIT. They are separate programs that Slipstream starts; Slipstream links none of
+them, and its own code is MIT ([LICENSE](../LICENSE)), as is encode-worker's.
+
+The app ships every licence in `Contents/Resources/licenses` (menu: "Lizenzen …"): Slipstream's,
+encode-worker's, and the toolchain's folder with each component's licence and `SOURCES.md`, which
+names each source by URL and sha256 and ffmpeg's configuration. The source itself, the
+Corresponding Source, is attached to encode-queue's `toolchain-<N>` release, from toolchain 2 on.
+`bin/package` fails when it would ship ffmpeg without that folder.

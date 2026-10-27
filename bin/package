@@ -55,6 +55,18 @@ done
 for f in build/tools/versions.txt build/tools/versions.json; do
   [[ -f $f ]] && cp "$f" "$app/Contents/Resources/"
 done
+# Resources/licenses: Slipstream's own (MIT), encode-worker's (MIT), and the toolchain's folder:
+# each component's licence and SOURCES.md, with where the source is. ffmpeg and ffprobe are
+# GPLv3 programs; the app ships them only with these (docs/tools.md, "Licences").
+lic="$app/Contents/Resources/licenses"
+mkdir -p "$lic"
+cp LICENSE "$lic/Slipstream-LICENSE"
+[[ -f build/worker/LICENSE ]] && cp build/worker/LICENSE "$lic/encode-worker-LICENSE"
+[[ -d build/tools/licenses ]] && cp build/tools/licenses/* "$lic/"
+if [[ -x "$helpers/ffmpeg" && ! -s "$lic/SOURCES.md" ]]; then
+  print "ffmpeg without its licences: the toolchain must carry licenses/ (toolchain 2 or later)" >&2
+  exit 1
+fi
 # REQUIRE_WORKER=1 (CI) refuses the ProRes-only fallback.
 if [[ -x "$helpers/encode-worker" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
   print "embedded: encode-worker $("$helpers/encode-worker" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"

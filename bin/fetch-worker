@@ -25,6 +25,8 @@ $toolchain_sha256  $toolchain" | shasum -a 256 -c
 
 mv $worker ../worker/encode-worker
 chmod +x ../worker/encode-worker
+# encode-worker's own licence (MIT), from the same tag, for the app's licences folder.
+gh api "repos/$repo/contents/LICENSE?ref=$tag" -H 'Accept: application/vnd.github.raw' > ../worker/LICENSE
 tar xzf $toolchain -C ../tools --strip-components 1
 cd ..
 rm -rf fetch
@@ -34,6 +36,9 @@ for f in worker/encode-worker tools/ffmpeg tools/ffprobe tools/whisper-cli; do
   file $f | grep -q 'Mach-O 64-bit executable arm64' || { print "$f is not a macOS arm64 binary" >&2; exit 1; }
 done
 [[ -f tools/versions.txt ]] || { print "missing in $tag: versions.txt" >&2; exit 1; }
+grep -q 'MIT License' worker/LICENSE || { print "encode-queue $tag: no MIT licence" >&2; exit 1; }
+# From toolchain 2 on the tarball carries each component's licence and SOURCES.md.
+[[ -s tools/licenses/SOURCES.md ]] && print "licences: $(ls tools/licenses | tr '\n' ' ')"
 print "embedding encode-queue $tag: $(worker/encode-worker --version)"
 cat tools/versions.txt
 tools/ffmpeg -hide_banner -version | head -1

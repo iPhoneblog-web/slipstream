@@ -179,6 +179,7 @@ struct MenuContent: View {
         Button("Funkhaus öffnen") { model.openSite() }
         Button("Einstellungen …") { model.showSettings() }
         Button("Über Slipstream") { About.show(model) }
+        Button("Lizenzen …") { About.showLicences() }
         if let latest = model.updateAvailable {
             Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
         }
@@ -240,6 +241,19 @@ enum About {
         }
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+
+    /// The licences folder in Finder: Slipstream's and encode-worker's (MIT), and the
+    /// toolchain's, with SOURCES.md, which says where the source of ffmpeg (GPLv3) is.
+    @MainActor
+    static func showLicences() {
+        guard let url = Bundle.main.url(forResource: "licenses", withExtension: nil) else { return }
+        let sources = url.appendingPathComponent("SOURCES.md")
+        if FileManager.default.fileExists(atPath: sources.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([sources])
+        } else {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// `Contents/Resources/versions.txt`, from the toolchain of encode-queue (bin/fetch-worker).

@@ -42,6 +42,14 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
 An update: when the menu says "Update verfügbar", download the new DMG and replace the app. The
 site, the extension and the pairing stay.
 
+## Licences
+
+Slipstream's own code is MIT: [LICENSE](LICENSE). It embeds programs under their own licences:
+encode-worker (MIT) and encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
+(with x264 and x265, GPLv2 or later; LAME, LGPL; libvmaf, BSD-2-Clause-Patent) and whisper-cli is
+MIT. Every licence is in the app (menu: "Lizenzen …"); the source of the toolchain is attached to
+encode-queue's `toolchain-<N>` release ([docs/tools.md](docs/tools.md), "Licences").
+
 ## The code
 
 Swift 6 (language mode 5), SwiftUI, AVFoundation, VideoToolbox, Network.framework; macOS 14 or
