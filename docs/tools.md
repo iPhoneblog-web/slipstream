@@ -33,7 +33,8 @@ whisper-cli is MIT. They are separate programs that Slipstream starts; Slipstrea
 them, and its own code is MIT ([LICENSE](../LICENSE)), as is encode-worker's.
 
 The app ships every licence in `Contents/Resources/licenses` (menu: "Lizenzen …"): Slipstream's,
-encode-worker's, and the toolchain's folder with each component's licence and `SOURCES.md`, which
-names each source by URL and sha256 and ffmpeg's configuration. The source itself, the
-Corresponding Source, is attached to encode-queue's `toolchain-<N>` release, from toolchain 2 on.
+encode-worker's, Sparkle's (MIT, linked into the app for updates), and the toolchain's folder
+with each component's licence and `SOURCES.md`, which names each source by URL and sha256 and
+ffmpeg's configuration. The source itself, the Corresponding Source, is attached to
+encode-queue's `toolchain-<N>` release, from toolchain 2 on.
 `bin/package` fails when it would ship ffmpeg without that folder.

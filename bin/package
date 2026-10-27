@@ -63,6 +63,8 @@ mkdir -p "$lic"
 cp LICENSE "$lic/Slipstream-LICENSE"
 [[ -f build/worker/LICENSE ]] && cp build/worker/LICENSE "$lic/encode-worker-LICENSE"
 [[ -d build/tools/licenses ]] && cp build/tools/licenses/* "$lic/"
+# Sparkle (MIT, with the notices of the code it carries) from the package Xcode checked out.
+cp build/dd/SourcePackages/checkouts/Sparkle/LICENSE "$lic/Sparkle-LICENSE"
 if [[ -x "$helpers/ffmpeg" && ! -s "$lic/SOURCES.md" ]]; then
   print "ffmpeg without its licences: the toolchain must carry licenses/ (toolchain 2 or later)" >&2
   exit 1
@@ -87,6 +89,15 @@ done
 if [[ $identity == - ]]; then ts=(--timestamp=none); else ts=(--timestamp); fi
 sign() { codesign --force --sign "$identity" --options runtime "${ts[@]}" "$@"; }
 for f in "$helpers"/*(.x); do sign "$f"; done
+# Sparkle, inside out as its documentation asks: its XPC services (the downloader keeps its
+# entitlements), Autoupdate, Updater.app, then the framework.
+fw="$app/Contents/Frameworks/Sparkle.framework"
+if [[ -d $fw ]]; then
+  for x in "$fw"/Versions/B/XPCServices/*.xpc(N); do sign --preserve-metadata=entitlements "$x"; done
+  sign "$fw/Versions/B/Autoupdate"
+  sign "$fw/Versions/B/Updater.app"
+  sign "$fw"
+fi
 sign --entitlements Extension/SlipstreamExtension.entitlements "$appex"
 sign --entitlements App/Slipstream/Slipstream.entitlements "$app"
 codesign --verify --strict --deep --verbose=2 "$app"
@@ -97,6 +108,13 @@ codesign -d --entitlements - --xml "$appex" 2>/dev/null | grep -q com.apple.secu
 # them from its defaults).
 [[ $(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$appex/Contents/Info.plist") == com.apple.Safari.web-extension ]]
 [[ $(plutil -extract LSUIElement raw "$app/Contents/Info.plist") == true ]]
+# Updates: Sparkle's feed and its public key. REQUIRE_UPDATES=1 (CI on a tag) refuses a release
+# without the key: it could never update itself.
+plutil -extract SUFeedURL raw "$app/Contents/Info.plist" >/dev/null
+if [[ -n ${REQUIRE_UPDATES:-} && -z $(plutil -extract SUPublicEDKey raw "$app/Contents/Info.plist" 2>/dev/null) ]]; then
+  print "no SPARKLE_PUBLIC_ED_KEY in project.yml: a release without it cannot update itself" >&2
+  exit 1
+fi
 # The icon from the asset catalog: Assets.car and the AppIcon.icns actool makes from it.
 [[ $(plutil -extract CFBundleIconName raw "$app/Contents/Info.plist") == AppIcon ]]
 [[ -s "$app/Contents/Resources/Assets.car" && -s "$app/Contents/Resources/AppIcon.icns" ]]

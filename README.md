@@ -53,16 +53,18 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
    "Diesen Mac als Helper hinzufügen".
 
-An update: when the menu says "Update verfügbar", download the new DMG, replace the app, and
-quit Safari with ⌘Q and open it again. The site, the extension and the pairing stay.
+Updates install themselves: Slipstream checks once a day (Sparkle) and asks before it installs a
+new release in place; "Nach Updates suchen …" in the menu checks at once. After an update, quit
+Safari with ⌘Q and open it again. The site, the extension and the pairing stay.
 
 ## Licences
 
 Slipstream's own code is MIT: [LICENSE](LICENSE). It embeds programs under their own licences:
 encode-worker (MIT) and encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
 (with x264 and x265, GPLv2 or later; LAME, LGPL; libvmaf, BSD-2-Clause-Patent) and whisper-cli is
-MIT. Every licence is in the app (menu: "Lizenzen …"); the source of the toolchain is attached to
-encode-queue's `toolchain-<N>` release ([docs/tools.md](docs/tools.md), "Licences").
+MIT, as is Sparkle, which installs updates. Every licence is in the app (menu: "Lizenzen …");
+the source of the toolchain is attached to encode-queue's `toolchain-<N>` release
+([docs/tools.md](docs/tools.md), "Licences").
 
 ## The code
 

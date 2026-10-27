@@ -165,8 +165,9 @@ struct MenuContent: View {
             Button("Einstellungen …") { model.showSettings() }
             Button("Über Slipstream") { About.show(model) }
             Button("Lizenzen …") { About.showLicences() }
+            Button("Nach Updates suchen …") { model.updates.check() }
             if let latest = l.update {
-                Button("Update verfügbar: \(latest) …") { NSWorkspace.shared.open(AppModel.releases) }
+                Button("Update verfügbar: \(latest) …") { model.updates.check() }
             }
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
@@ -232,6 +233,10 @@ struct SettingsView: View {
                 Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
                 Text("Ausschalten geht auch in den Systemeinstellungen → Allgemein → Anmeldeobjekte.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("Automatisch nach Updates suchen", isOn: Binding(
+                    get: { model.updates.updater.automaticallyChecksForUpdates },
+                    set: { model.updates.updater.automaticallyChecksForUpdates = $0 }))
+                Button("Nach Updates suchen …") { model.updates.check() }
                 LabeledContent("Version", value: model.version)
                 Button("Lizenzen …") { About.showLicences() }
             }

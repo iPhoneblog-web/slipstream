@@ -57,6 +57,7 @@ final class AppModel: ObservableObject {
 
     private let startedAt = Date()
     private let windows = Windows()
+    let updates = Updates()
 
     /// The Funkhaus site this Mac works for; nil until the setup window checked one.
     @Published private(set) var site: SiteConfig?

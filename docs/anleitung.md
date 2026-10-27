@@ -43,6 +43,9 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 - **Bei der Anmeldung starten** (beim Einrichten an, in den Einstellungen umschaltbar):
   Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
   Anmeldeobjekte; dort ausgeschaltet, zeigen es die Einstellungen auch aus.
+- **Nach Updates suchen …:** Slipstream sucht ohnehin einmal am Tag und fragt, bevor es eine neue
+  Version installiert; abschalten in Einstellungen → Allgemein. Danach Safari mit ⌘Q beenden und
+  neu öffnen.
 - **Lizenzen …** zeigt die Lizenzen von Slipstream und von allem, was es mitbringt.
 
 Slipstream rechnet mit niedriger Priorität: was du am Mac tust, geht vor. Der Mac schläft nicht

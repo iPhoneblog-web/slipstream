@@ -45,7 +45,7 @@ After it, one JSON object per line:
 | `idle` | | no job |
 | `result` | `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | the last three results, the count today |
 | `paused` | `until` or null | the pause the queue knows |
-| `update` | `latest` | "Update verfügbar" |
+| `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 
