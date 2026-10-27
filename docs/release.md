@@ -11,7 +11,7 @@ every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slips
 git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1
 ```
 
-Never upload a build from a Mac by hand. There is no Sparkle: when `encoder` asks for a newer
+Never upload a build from a Mac by hand. There is no Sparkle: when the queue asks for a newer
 app (the worker's `update` event), the menu says "Update verfügbar" and links to the latest
 release; the user installs it by hand.
 
@@ -58,5 +58,5 @@ No agent handles the keys; the maintainer sets the secrets.
 - **The Developer ID certificate expires on 2027-02-01**, with Apple's G1 intermediate. Builds
   signed with a timestamp and notarised before then keep running; new builds need a new
   certificate and a new `DEVELOPER_ID_P12_BASE64` ([TODO.md](TODO.md)).
-- **The app group** `W9N692KH39.io.github.iphoneblog-web.slipstream` is team-prefixed, so a
+- **The app group** `W9N692KH39.io.github.kyrios.slipstream` is team-prefixed, so a
   Developer ID app needs no provisioning profile for it.

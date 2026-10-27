@@ -3,13 +3,13 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.1`, toolchain 1; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.2`, toolchain 1; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
 **No `--app-version`, but `--host-app-*`.** The helper API's `app_version` is the worker's own
 release, which the queue compares with its `min_app_version`; the worker sends it by itself.
-Slipstream's own name and version go to `host_app` (helper.yaml 1.1.1, worker `v0.2.1`), so the
+Slipstream's own name and version go to `host_app` (helper.yaml 1.1.1, worker `v0.2.1` and later), so the
 queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
 
 ## How the app runs it
@@ -59,7 +59,7 @@ takes no data in `Contents/Helpers`. `bin/fetch-worker` pins the release by tag 
 
 ## Pairing
 
-The upload center's Encoder page asks the extension for the Mac's name and public key
+The Funkhaus's Encoder page asks the extension for the Mac's name and public key
 (`pairing.identity`), registers the worker with the queue, and hands the tunnel configuration
 back (`pairing.tunnel`). Slipstream writes it as one `eqtunnel1 …` line to `tunnel.conf` and
 restarts the worker. The key pair is made on first use and stays in the login keychain, item

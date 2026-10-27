@@ -1,47 +1,46 @@
 # Slipstream
 
-Slipstream is the helper app on a Mac for the iPhoneblog video server (ADR-0007 in
-iphoneblog-wordpress). It lives in the menu bar and does two things:
+Slipstream is a Mac helper for a **Funkhaus**, a web app that takes video uploads and encodes
+them on its own server with [encode-queue](https://github.com/kyrios/encode-queue). It lives in
+the menu bar and does two things:
 
-- **ProRes in the Funkhaus** (the upload center, `funkhaus.iphoneblog.de`, formerly
-  `upload.iphoneblog.de`, which keeps working). A ProRes file dropped into the Funkhaus in Safari is
-  encoded on this Mac into an HEVC intermediate at 50 Mbit/s before the page uploads it
+- **ProRes in the browser.** A ProRes file dropped into the Funkhaus in Safari is encoded on
+  this Mac into an HEVC intermediate at 50 Mbit/s before the page uploads it
   ([docs/encoding.md](docs/encoding.md)). Its Safari extension carries the file from the page to
   the app and the result back ([docs/extension-protocol.md](docs/extension-protocol.md)).
-- **Jobs from the queue.** Once paired, it runs the queue's worker, which takes rungs and whisper
-  runs from `encoder` through its own WireGuard tunnel, at low priority
+- **Jobs from the queue.** Once paired, it runs encode-queue's worker, which takes encodes and
+  whisper runs from the server through its own WireGuard tunnel, at low priority
   ([docs/worker.md](docs/worker.md)).
 
-It was ProRes Drop, a drop window with its own 5 Mbit/s encode; that window is gone.
+Slipstream works for one Funkhaus site, set up at first launch. Its extension answers that site
+only and stays silent everywhere else ([docs/traps.md](docs/traps.md), "Origins").
 
 **Download:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg), the newest
 release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later.
 
-## Installieren
+## Install
 
-Für Alex, oder wer sonst ProRes ins Funkhaus zieht. Einmal pro Mac, etwa fünf Minuten.
+1. **Download and copy.** Open the DMG and drag **Slipstream** onto **Programme**
+   (Applications). Start it; macOS asks once whether to open an app from the internet.
+   Slipstream has no main window; it shows a wind icon in the menu bar.
+2. **Set up the site.** The first launch opens "Slipstream einrichten": enter the Funkhaus's
+   host, such as `funkhaus.example.org`, and choose **Prüfen und speichern**. Slipstream fetches
+   `https://<host>/.well-known/funkhaus.json` and keeps the site only if it answers as a
+   Funkhaus speaking a protocol this version knows. Until then the menu offers only
+   **Einrichten …**. Settings can change the site later.
+3. **Turn the extension on.** Safari → Settings → Extensions → tick **Slipstream**. Safari says
+   the extension can read and change pages on **all websites** ("alle Websites"): it is matched to
+   every https page because the site is your choice, not the manifest's, but it answers only the
+   site set up in step 2. Safari still asks per site: on the Funkhaus's first visit choose
+   **Always allow on this website**.
+4. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu now says
+   "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
+   "Diesen Mac als Helper hinzufügen".
+5. **Optional:** System Settings → General → Login Items → add Slipstream, so it starts with
+   every login.
 
-1. **DMG laden:** [Slipstream.dmg](../../releases/latest/download/Slipstream.dmg). Öffnen und
-   **Slipstream** auf **Programme** ziehen. Danach das DMG im Finder auswerfen.
-2. **Slipstream starten:** in Programme doppelklicken. macOS fragt einmal, ob du eine App aus
-   dem Internet öffnen willst: **Öffnen**. Slipstream hat kein Fenster; es erscheint als
-   kleines Wind-Icon oben rechts in der Menüleiste.
-3. **Die Safari-Extension einschalten:** Safari → **Einstellungen …** → **Erweiterungen**, bei
-   **Slipstream** den Haken setzen. Safari fragt nach der Berechtigung für
-   `upload.iphoneblog.de` und `funkhaus.iphoneblog.de`: **Immer erlauben** (oder
-   „Auf dieser Website immer erlauben“).
-4. **Testen:** das Funkhaus in Safari öffnen (bzw. die Seite neu laden, falls sie schon
-   offen war) und eine kurze ProRes-Datei hineinziehen. Statt der Meldung „ProRes wird hier
-   nicht unterstützt“ zeigt die Seite jetzt den Fortschritt der Umwandlung.
-5. **Bei jedem Login automatisch starten** (empfohlen): Systemeinstellungen → **Allgemein** →
-   **Anmeldeobjekte** → unter „Beim Anmelden öffnen“ auf **+** und **Slipstream** wählen.
-
-Ein Update: wenn das Menü „Update verfügbar“ zeigt, das neue DMG laden und die App in Programme
-ersetzen. Die Extension bleibt eingeschaltet.
-
-Wichtig: Slipstream muss laufen, solange ProRes umgewandelt wird, und der Tab bleibt offen, bis
-der Upload durch ist. Schließt du ihn vorher, geht nichts verloren: Upload wieder öffnen, die
-Seite macht weiter. Was das Menü zeigt und was bei Fehlern hilft: [docs/anleitung.md](docs/anleitung.md).
+An update: when the menu says "Update verfügbar", download the new DMG and replace the app. The
+site, the extension and the pairing stay.
 
 ## The code
 
@@ -55,7 +54,7 @@ bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slip
 bin/fetch-worker     the worker and its tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's release
 bin/check-launch     starts the built app and checks that Settings opens (CI)
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
-bin/rungs.zsh        ADR test 5: intermediates, the 4K rung from each, VMAF (docs/encoding.md)
+bin/rungs.zsh        the intermediate's rate against the 1-point rule: intermediates, the 4K rung, VMAF
 swift test           the tests (the fixtures are committed)
 ```
 
@@ -74,16 +73,16 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | [docs/encoding.md](docs/encoding.md) | The intermediate: what comes out, why 50 Mbit/s, the measurements |
 | [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
-| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp at `encoder`'s versions |
+| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp: encode-queue's toolchain |
 | [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |
 | [docs/traps.md](docs/traps.md) | Safari, priority, encoding and signing traps |
-| [docs/anleitung.md](docs/anleitung.md) | The user's guide, in German |
+| [docs/anleitung.md](docs/anleitung.md) | The menu and what helps when something fails, in German, the app's language |
 | [docs/TODO.md](docs/TODO.md) | Open work |
 
 ## Where it logs
 
 ```
-/usr/bin/log show --last 1h --predicate 'subsystem == "io.github.iphoneblog-web.slipstream"'
+/usr/bin/log show --last 1h --predicate 'subsystem == "io.github.kyrios.slipstream"'
 ```
 
 Type `/usr/bin/log`, not `log`: zsh has a builtin of that name. Its files are in

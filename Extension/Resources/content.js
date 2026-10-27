@@ -1,8 +1,14 @@
-// Runs on the Funkhaus (the upload center, at either of its addresses), in every frame, from document_start. Answers the page's hello
-// (docs/extension-protocol.md, section 1) and, with Slipstream running, puts the bridge into the
-// page and hands the page one end of a MessageChannel, the bridge the other.
+// Runs on every https page, in every frame, from document_start, because the site is the user's
+// choice, not the manifest's. It answers only on the Funkhaus site Slipstream is set up for; on
+// every other page it stays silent, puts nothing into the page and answers nothing
+// (docs/traps.md, "Origins"). There it answers the page's hello (docs/extension-protocol.md,
+// section 1) and, with Slipstream running, puts the bridge into the page and hands the page one
+// end of a MessageChannel, the bridge the other.
 (() => {
   const VERSION = browser.runtime.getManifest().version;
+  // Asked once per page: is this the configured site? Every message waits for the answer.
+  const mine = browser.runtime.sendMessage({ type: "site" })
+    .then((r) => !!(r && r.match), () => false);
   const BRIDGE = browser.runtime.getURL("bridge.html");
   const BRIDGE_ORIGIN = new URL(BRIDGE).origin;
   let bridge = null;
@@ -26,6 +32,7 @@
   window.addEventListener("message", async (ev) => {
     const d = ev.data;
     if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "launch" || d.re !== undefined) return;
+    if (!(await mine)) return;
     let r;
     try {
       r = await browser.runtime.sendMessage({ type: "launch" });
@@ -45,6 +52,7 @@
   window.addEventListener("message", async (ev) => {
     const d = ev.data;
     if (ev.source !== window || !d || d.slipstream !== 1 || d.type !== "hello" || d.re !== undefined) return;
+    if (!(await mine)) return;
     let p;
     try {
       p = await browser.runtime.sendMessage({ type: "presence" });

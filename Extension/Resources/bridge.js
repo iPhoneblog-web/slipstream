@@ -1,10 +1,13 @@
-// The bridge: the extension's own page, a hidden iframe in the Funkhaus (the upload center). Safari lets it
-// reach 127.0.0.1, which neither the page nor the content script may (ADR-0007, test 1). It
-// takes requests from the page over the MessagePort the content script handed it and calls
-// Slipstream's loopback endpoint (docs/extension-protocol.md, sections 2 and 3).
-// The Funkhaus (the upload center), at its new name and its old one, which keeps working.
-const PAGES = ["https://funkhaus.iphoneblog.de", "https://upload.iphoneblog.de"];
+// The bridge: the extension's own page, a hidden iframe in the Funkhaus site. Safari lets it
+// reach 127.0.0.1, which neither the page nor the content script may (docs/traps.md). It takes
+// requests from the page over the MessagePort the content script handed it and calls
+// Slipstream's loopback endpoint (docs/extension-protocol.md, sections 2 and 3). Any page could
+// load it as a frame (it is web-accessible on every https page), so it takes a port only from a
+// parent on the configured site, and names that site to the loopback, which checks it too.
 const SLICE = 64 * 1024 * 1024;
+
+// The page this bridge serves: the configured site's origin, once a port came from it.
+let page = null;
 
 let loop = null;
 
@@ -15,7 +18,7 @@ function fail(code, message) {
 async function loopback(refresh) {
   if (!loop || refresh) {
     const r = await browser.runtime.sendMessage({ type: "loopback" });
-    loop = r ? { base: `http://127.0.0.1:${r.port}/v1`, token: r.token } : null;
+    loop = r ? { base: `http://127.0.0.1:${r.port}/v1`, token: r.token, site: r.site } : null;
   }
   if (!loop) throw fail("helper-gone", "Slipstream läuft nicht.");
   return loop;
@@ -26,7 +29,8 @@ async function call(method, path, { body, headers, raw } = {}, retried = false) 
   const l = await loopback(false);
   let r;
   try {
-    r = await fetch(l.base + path, { method, body, headers: { "X-Slipstream-Token": l.token, ...(headers || {}) } });
+    r = await fetch(l.base + path, { method, body,
+      headers: { "X-Slipstream-Token": l.token, "X-Slipstream-Site": page, ...(headers || {}) } });
   } catch (e) {
     if (!retried) { loop = null; return call(method, path, { body, headers, raw }, true); }
     throw fail("helper-gone", "Slipstream antwortet nicht.");
@@ -152,9 +156,14 @@ async function handle(port, m) {
   }
 }
 
-window.addEventListener("message", (ev) => {
-  if (ev.source !== window.parent || !PAGES.includes(ev.origin)) return;
+window.addEventListener("message", async (ev) => {
+  if (ev.source !== window.parent || window.parent === window) return;
   if (!ev.data || ev.data.slipstream !== 1 || ev.data.type !== "port" || !ev.ports[0]) return;
+  let l;
+  try { l = await loopback(true); } catch (e) { return; }
+  // Only the configured site's page; everything else gets no port and no answer.
+  if (!l.site || ev.origin !== l.site) return;
+  page = ev.origin;
   const port = ev.ports[0];
   port.onmessage = async (e) => {
     const m = e.data || {};

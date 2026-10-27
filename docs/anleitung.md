@@ -2,7 +2,7 @@
 
 Slipstream wandelt ProRes-Dateien, die du ins Funkhaus ziehst, auf deinem Mac um, bevor
 sie hochladen. Auf einem gekoppelten Mac hilft es außerdem dem Encoder bei seinen Aufträgen.
-Installieren: [README, „Installieren“](../README.md#installieren).
+Installieren und die Funkhaus-Seite einrichten: [README, „Install“](../README.md#install).
 
 ## ProRes hochladen
 
@@ -33,7 +33,7 @@ Installieren: [README, „Installieren“](../README.md#installieren).
   einem Mac, der nur ProRes umwandelt.
 - **Safari-Extension:** „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
   Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
-  Einstellungen → Erweiterungen → Slipstream die Websites `upload.iphoneblog.de` und `funkhaus.iphoneblog.de` erlauben (nach
+  Einstellungen → Erweiterungen → Slipstream die eingerichtete Funkhaus-Seite erlauben (nach
   einem Update von Slipstream fragt Safari das neu).
 - **Einstellungen …:** CPU-Threads, ob Whisper die GPU nutzen darf, Aufträge gleichzeitig, der
   Stand der Kopplung.
@@ -47,7 +47,7 @@ ein, solange Slipstream einen Auftrag hat.
 - **Das Funkhaus zeigt „Slipstream starten“:** Die Extension ist an, die App läuft nicht.
   Ein Klick darauf startet sie im Hintergrund.
 - **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert, die
-  Extension ist aus, oder sie darf auf `upload.iphoneblog.de` und `funkhaus.iphoneblog.de` nicht laufen (Safari →
+  Extension ist aus, oder sie darf auf der Funkhaus-Seite nicht laufen (Safari →
   Einstellungen → Erweiterungen → Slipstream; das Menü zeigt dann „Safari-Extension: noch nicht
   verbunden“). Danach die Seite neu laden.
 - **„Das ist keine Videodatei.“** oder **„Dieses Videoformat (…) kann der Mac nicht lesen.“**:

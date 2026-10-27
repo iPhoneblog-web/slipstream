@@ -2,17 +2,17 @@
 
 What Slipstream makes of a ProRes file dropped into the upload center, why, and what it
 measured. The numbers live in `Sources/DropCore/Plan.swift` and `Transcoder.swift`; this page
-carries their reasons. ADR-0007 §7 and §8 (iphoneblog-wordpress) decided them.
+carries their reasons. The Funkhaus design record decided them (its ADR-0007, §7 and §8).
 
 ## Why an intermediate
 
 4K ProRes 422 HQ is about 5 GB a minute: too big to upload. Slipstream encodes it on the Mac
-before the upload, into an HEVC file that is only the ladder's source: `encoder` makes every rung
+before the upload, into an HEVC file that is only the ladder's source: the server makes every rung
 from it, 4K at `ultrafast` in stage 1 and `slower` in stage 2, as from any master. No reader
 gets it, and it is not archived. The ProRes on the Mac stays the only source for encoding the
 video again.
 
-**The rule** (ADR-0007 §8): the 4K rung made from the intermediate scores at most 1 VMAF point
+**The rule**: the 4K rung made from the intermediate scores at most 1 VMAF point
 below the 4K rung made from the ProRes, both against the ProRes, with `vmaf_4k_v0.6.1`.
 
 ## What comes out
@@ -33,7 +33,7 @@ upload it: playable by AVFoundation, `hvc1`, Main 10, the index in front, the so
 within one frame, audio where the source had some. Until then it lives in a temporary folder.
 
 10 minutes of 4K are 3.8 GB at 50 Mbit/s, about 35 s of upload at 1 Gbit/s; a 30-minute video
-(11 GB) still fits the 28 GiB `encoder` holds for uploads in flight.
+(11 GB) still fits the 28 GiB the server holds for uploads in flight.
 
 ## Where it runs
 
@@ -43,7 +43,7 @@ limits of the settings do not apply: the user waits for it, and it runs on the m
 
 ## Measured
 
-ADR-0007 §8, on Thorsten's Mac Studio (M2 Max, Homebrew ffmpeg's `hevc_videotoolbox`,
+On a Mac Studio (M2 Max, Homebrew ffmpeg's `hevc_videotoolbox`,
 libvmaf, 2026-10-26). The clip: 10 s of 4K30 iPhone footage (HLG), made into ProRes 422 HQ.
 The 4K rung: x265 `slower` CRF 29, `vbv-maxrate=5000:vbv-bufsize=10000`.
 
@@ -63,7 +63,7 @@ the file has 49.9 Mbit/s (video 49.65, audio 0.25), 374 MB, 1500 frames, `hvc1` 
 bt709 ×3, boxes `ftyp moov mdat`, 60.000 s; AVFoundation plays it and decodes its first and
 last frame.
 
-**Alex's first real export decides** (ADR test 5): `bin/rungs.zsh` runs the table above on it.
+**The first real export decides**: `bin/rungs.zsh` runs the table above on it.
 If the rung from the intermediate loses more than 1 point at 50 Mbit/s, the rate goes to the
 first of 60 and 80 that passes, here and in `Plan.swift`. A warning sign: on a 2-s ProRes 422 HQ
 clip of 4K footage (M2 Max, 2026-10-26, when `bin/rungs.zsh` was added) 50 Mbit/s lost 1.37

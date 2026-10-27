@@ -168,3 +168,59 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual(b.append(Data("c\n\n".utf8)), ["bc", ""])
     }
 }
+
+final class SiteConfigTests: XCTestCase {
+    func testHostFromInput() throws {
+        XCTAssertEqual(try SiteConfig.host(from: "funkhaus.example.org"), "funkhaus.example.org")
+        XCTAssertEqual(try SiteConfig.host(from: "  https://Funkhaus.Example.org/encoder?x=1 "), "funkhaus.example.org")
+        XCTAssertEqual(try SiteConfig.host(from: "localhost.test:8443"), "localhost.test:8443")
+    }
+
+    /// The guard fires: no dot, odd characters, a bad port, empty.
+    func testBadHosts() {
+        for bad in ["", "localhost", "funk haus.org", "a..b", ".a.b", "a.b.", "a.b:0", "a.b:x", "a.b:1:2", "ex@mple.org"] {
+            XCTAssertThrowsError(try SiteConfig.host(from: bad), bad)
+        }
+    }
+
+    func testWellKnown() throws {
+        let ok = Data(#"{"app":"funkhaus","name":"Funkhaus","slipstream":{"protocol":1,"min_version":"1.1.0"}}"#.utf8)
+        let site = try SiteConfig.check(host: "funkhaus.example.org", wellKnown: ok, appVersion: "1.1.0")
+        XCTAssertEqual(site, SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1))
+        XCTAssertEqual(site.origin, "https://funkhaus.example.org")
+        XCTAssertEqual(SiteConfig.wellKnown("a.b").absoluteString, "https://a.b/.well-known/funkhaus.json")
+    }
+
+    /// The guard fires: not JSON (a login page), another app, a protocol this app does not
+    /// speak, a minimum above this version.
+    func testWellKnownRefusals() {
+        func check(_ s: String, _ v: String = "1.1.0") -> SiteConfig.Problem? {
+            do { _ = try SiteConfig.check(host: "a.b", wellKnown: Data(s.utf8), appVersion: v); return nil }
+            catch { return error as? SiteConfig.Problem }
+        }
+        XCTAssertEqual(check("<html>login</html>"), .notFunkhaus("kein JSON"))
+        XCTAssertEqual(check(#"{"app":"other","slipstream":{"protocol":1}}"#), .notFunkhaus("app ist nicht funkhaus"))
+        XCTAssertEqual(check(#"{"app":"funkhaus"}"#), .notFunkhaus("slipstream.protocol fehlt"))
+        XCTAssertEqual(check(#"{"app":"funkhaus","slipstream":{"protocol":2}}"#), .unsupportedProtocol(2))
+        XCTAssertEqual(check(#"{"app":"funkhaus","slipstream":{"protocol":1,"min_version":"1.2.0"}}"#), .tooOld(min: "1.2.0"))
+        XCTAssertEqual(check(#"{"app":"funkhaus","slipstream":{"protocol":1,"min_version":"1.1.0"}}"#, "0.0.0"), .tooOld(min: "1.1.0"))
+    }
+
+    func testVersions() {
+        XCTAssertEqual(SiteConfig.compare("1.10.0", "1.9.2"), 1)
+        XCTAssertEqual(SiteConfig.compare("1.1", "1.1.0"), 0)
+        XCTAssertEqual(SiteConfig.compare("v1.0.4", "1.1.0"), -1)
+    }
+
+    func testFileRoundTrip() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("site-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertNil(SiteConfig.load(from: dir))
+        let site = SiteConfig(host: "funkhaus.example.org", name: "F", protocol: 1)
+        try site.save(to: dir)
+        XCTAssertEqual(SiteConfig.load(from: dir), site)
+        // A file someone edited into something that is no host is no site.
+        try Data(#"{"host":"evil.org/x","name":"x","protocol":1}"#.utf8).write(to: dir.appendingPathComponent("site.json"))
+        XCTAssertNil(SiteConfig.load(from: dir))
+    }
+}

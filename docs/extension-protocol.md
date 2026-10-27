@@ -1,29 +1,31 @@
 # The extension's messages
 
-How the upload center's page talks to Slipstream on the same Mac: page ↔ content script ↔
-bridge ↔ helper. ADR-0007 §5 (pairing) and §7 (ProRes) say why; this page says what goes over
-the wire. Protocol version **1**. A change that breaks a page bumps it.
+How a Funkhaus page talks to Slipstream on the same Mac: page ↔ content script ↔ bridge ↔
+helper. The Funkhaus's design record (ADR-0007, §5 pairing and §7 ProRes) says why; this page
+says what goes over the wire. Protocol version **1**. A change that breaks a page bumps it, and
+the Funkhaus names the protocols it speaks in its well-known file (section 4).
 
 ```
-page (upload center, maybe inside wp-admin's iframe)
+page (the Funkhaus site set up in Slipstream, maybe inside another site's iframe)
   │  window.postMessage: hello only
 content script (the extension, in the page's frame)
   │  browser.runtime: presence ──► background ──► native messaging ──► Slipstream's app extension
   │  hands the page one end of a MessageChannel, the bridge the other
 bridge (the extension's page bridge.html, a hidden iframe in the page)
-  │  fetch, X-Slipstream-Token
+  │  fetch, X-Slipstream-Token, X-Slipstream-Site
 helper (Slipstream's loopback endpoint on 127.0.0.1)
 ```
 
 **The page never sees the port or the token**, and never fetches `127.0.0.1` itself: Safari
-blocks that from an HTTPS page and from a content script (ADR-0007, test 1). Only the bridge
-does.
+blocks that from an HTTPS page and from a content script ([traps.md](traps.md)). Only the
+bridge does. **Everything here happens on the configured site only**; on every other page the
+extension stays silent ([traps.md](traps.md), "Origins").
 
 ## 1. Hello: is the helper there?
 
-The content script runs on `https://funkhaus.iphoneblog.de/*` and `https://upload.iphoneblog.de/*`
-(the Funkhaus under its new and its old name), in every frame, from `document_start`; the
-bridge accepts its port from either origin. The page asks:
+The content script runs on every https page, in every frame, from `document_start`, and answers
+only when the page's origin is the site Slipstream is set up for (`https://<host>`); the bridge
+takes its port only from that origin. The page asks:
 
 ```js
 window.postMessage({ slipstream: 1, type: "hello", id: "h1" }, location.origin);
@@ -34,7 +36,7 @@ The content script answers on the same window, with the same `id` in `re`:
 ```js
 // helper running: one end of a MessageChannel travels with the answer (ev.ports[0])
 { slipstream: 1, type: "hello", re: "h1", ok: true, extension: "1.0.0",
-  helper: { present: true, version: "1.0.0", name: "Alex’ MacBook Pro" } }
+  helper: { present: true, version: "1.0.0", name: "Studio-Mac" } }
 // extension there, helper not running (or too old): no port
 { slipstream: 1, type: "hello", re: "h1", ok: true, extension: "1.0.0",
   helper: { present: false, reason: "not-running" } }       // or "too-old"
@@ -67,7 +69,7 @@ prompt, and answers once the app's loopback is up, after at most about 10 s:
 
 ```js
 { slipstream: 1, type: "launch", re: "l1", ok: true, launched: true,
-  helper: { present: true, version: "1.0.1", name: "Alex’ MacBook Pro" } }
+  helper: { present: true, version: "1.0.1", name: "Studio-Mac" } }
 // it already ran: launched false
 { slipstream: 1, type: "launch", re: "l1", ok: true, launched: false, helper: { present: true, … } }
 // it did not come up
@@ -101,7 +103,7 @@ they are (structured clone: a reference to the file on disk, not a copy).
 `id` is any string the page picks, unique per port. `error.message` is German, for the user;
 the page acts on `code`.
 
-### Pairing (ADR-0007 §5)
+### Pairing
 
 | type | request fields | answer fields |
 |---|---|---|
@@ -112,7 +114,7 @@ The page sends `name` and `public_key` to the queue's `POST /workers` and hands 
 `tunnel` (or `config_line`) back with `pairing.tunnel`. Pairing again replaces the old tunnel.
 The private key never leaves the Mac's keychain.
 
-### ProRes: a job per upload (ADR-0007 §7)
+### ProRes: a job per upload
 
 One job per upload, named by the upload center's upload id (`upload_id`: 1 to 64 of
 `A–Z a–z 0–9 _ -`).
@@ -157,7 +159,7 @@ until `job.finish` or `job.cancel`, and deletes anything older than 7 days.
 | `unknown-job` | no job under that `upload_id` |
 | `file-mismatch` | `job.send`'s file differs in name or size from the job's |
 | `not-ready` | `job.read` before `ready` |
-| `not-a-video`, `cannot-decode`, `check-failed` | the encode failed: the file, its codec, or Slipstream's check of the result (ProRes Drop's checks) |
+| `not-a-video`, `cannot-decode`, `check-failed` | the encode failed: the file, its codec, or Slipstream's check of the result (the intermediate's checks) |
 | `disk-full` | no room for the copy or the intermediate |
 | `not-paired` | `pairing.tunnel` without a key (Slipstream lost its keychain item) |
 | `launch-failed` | `launch` could not start the app, or it did not come up within about 10 s (section 1) |
@@ -165,12 +167,14 @@ until `job.finish` or `job.cancel`, and deletes anything older than 7 days.
 
 ## 3. The bridge and the helper (inside Slipstream; the page never calls this)
 
-The background gets `{port, token}` from Slipstream's app extension (native messaging; it reads
-the file the app writes into the app group container at start) and gives them only to the
-bridge. The token is 32 random bytes, hex, new at every start of the app; the port is free and
-random. The endpoint listens on `127.0.0.1` only, takes the token in `X-Slipstream-Token`,
-answers only an `Origin` of `safari-web-extension://…`, and answers a preflight with
-`Access-Control-Allow-Private-Network: true`.
+The background asks Slipstream's app extension by native messaging (`site`, `presence`,
+`launch`); it reads the files the app writes into their app group (`site.json` at setup,
+`loopback.json` at every start). It tells a content script only whether its page is the site,
+and gives the port, the token and the site only to the bridge. The token is 32 random bytes, hex, new at every start of the app; the port is free and
+random. The endpoint listens on `127.0.0.1` only, takes the token in `X-Slipstream-Token` and
+the page's origin in `X-Slipstream-Site` (it must be the configured site), answers only an
+`Origin` of `safari-web-extension://…`, and answers a preflight with
+`Access-Control-Allow-Private-Network: true`. Before setup it answers nothing but `403`.
 
 | request | does |
 |---|---|
@@ -184,11 +188,19 @@ answers only an `Origin` of `safari-web-extension://…`, and answers a prefligh
 | `DELETE /v1/jobs/{upload_id}?reason=finish\|cancel` | `204` |
 | `GET /v1/jobs` | every job |
 
-## 4. What the upload center must allow
+## 4. What a Funkhaus serves and allows
 
+- **`/.well-known/funkhaus.json`**, without a login, so Slipstream's setup can check the site:
+
+  ```json
+  {"app": "funkhaus", "name": "Funkhaus", "slipstream": {"protocol": 1, "min_version": "1.1.0"}}
+  ```
+
+  Slipstream keeps the site only if `app` is `funkhaus`, it speaks `slipstream.protocol`, and its
+  version is at least `min_version`. The answer must come from that host (no redirect away).
 - **Its CSP lets the bridge in:** `frame-src 'self' safari-web-extension:`. Without a
   `frame-src` the page's `default-src 'self'` applies to frames, and Safari may apply it to an
-  extension's frame too. The first real run of v1.0.0 settles it ([traps.md](traps.md),
+  extension's frame too. The first real run of a release settles it ([traps.md](traps.md),
   "Checks"), and this line then says what it found.
 - Nothing else: the page never connects to `127.0.0.1`, so `connect-src` stays `'self'`. The
   `Blob` from `job.read` goes into the page's own tus upload as any `Blob`.

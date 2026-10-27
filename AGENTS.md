@@ -1,22 +1,23 @@
 # AGENTS.md
 
 Rules for agents changing this repository. [README.md](README.md) explains what Slipstream is
-and how to build it; read it next, then only the page your task needs. The server it helps is
-built by the private `infra` repository (its own `AGENTS.md`, `docs/video.md`); the design is
-ADR-0007 in `iphoneblog-wordpress`.
+and how to build it; read it next, then only the page your task needs. The queue and the worker
+it embeds are [kyrios/encode-queue](https://github.com/kyrios/encode-queue); the Funkhaus it
+works for and the servers behind it are documented outside this repository.
 
 ## 1. Always
 
 - **Write in English**, through `/anthropic-skills:plain-english`: pages, commit messages,
   answers to the maintainer. The app's screens, its messages and
   [docs/anleitung.md](docs/anleitung.md) are German, because its users read German.
-- **ADR-0007 decides the intermediate.** Every number in `Plan.swift` follows its §8 and the
-  measurements behind it; [docs/encoding.md](docs/encoding.md) names the source of each. Change
-  a number there first, with the measurement that justifies it (`bin/rungs.zsh`). Never guess a
-  different one: ask the maintainer. The tool versions follow `encoder` ([docs/tools.md](docs/tools.md)).
-- **The repository is public.** No secret, no internal hostname or address, no personal data, no
-  person's or customer's name in code, pages or commit messages. Facts about the machines live
-  in `infra`, which is private.
+- **The measurements decide the intermediate.** Every number in `Plan.swift` follows
+  [docs/encoding.md](docs/encoding.md), which names the source of each. Change a number there
+  first, with the measurement that justifies it (`bin/rungs.zsh`). Never guess a different one:
+  ask the maintainer. The tool versions are encode-queue's ([docs/tools.md](docs/tools.md)).
+- **The repository is public and neutral.** No secret, no hostname or address of a real
+  installation, no fixed Funkhaus site, no personal data, no person's or customer's name in
+  code, pages or commit messages; examples use `funkhaus.example.org`. The site is the user's
+  choice at first launch (docs/traps.md, "Origins").
 - **Run `bin/package` before you push**: the tests, the Xcode build, the signed bundle (needs
   `xcodegen`). CI runs the same on every push and pull request, and signs and notarises; a red
   run is yours.
@@ -67,12 +68,14 @@ says why; where a number cost a measurement, the message keeps the measurement.
 
   ```bash
   open -n dist/Slipstream.app
-  cat ~/Library/Group\ Containers/W9N692KH39.io.github.iphoneblog-web.slipstream/loopback.json
-  curl -H 'Origin: safari-web-extension://x' -H "X-Slipstream-Token: $TOKEN" http://127.0.0.1:$PORT/v1/ping
-  /usr/bin/log show --last 5m --predicate 'subsystem == "io.github.iphoneblog-web.slipstream"'
+  cat ~/Library/Group\ Containers/W9N692KH39.io.github.kyrios.slipstream/loopback.json
+  curl -H 'Origin: safari-web-extension://x' -H "X-Slipstream-Token: $TOKEN" \
+    -H 'X-Slipstream-Site: https://<the configured host>' http://127.0.0.1:$PORT/v1/ping
+  /usr/bin/log show --last 5m --predicate 'subsystem == "io.github.kyrios.slipstream"'
   ```
 
-  Quit the app by PID when done.
+  Quit the app by PID when done. Never beside a running Slipstream: both would write the one app
+  group file the extension reads.
 
 Say in the pull request which tests cover the change and what is still untested; the menu and
 Safari's extension settings need a person looking at the screen.

@@ -9,9 +9,10 @@ import SafariServices
 /// the app on the page's request (`launch`, section 1).
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     /// SlipstreamIDs in HelperCore; repeated here so the extension links no package.
-    static let appGroup = "W9N692KH39.io.github.iphoneblog-web.slipstream"
+    static let appGroup = "W9N692KH39.io.github.kyrios.slipstream"
     static let loopbackFile = "loopback.json"
     static let extensionSeenFile = "extension-seen"
+    static let siteFile = "site.json"
 
     private struct Announcement: Decodable {
         var port: Int
@@ -41,6 +42,8 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             reply(Self.presence())
         case "launch":
             Self.launch(reply)
+        case "site":
+            reply(["site": Self.site() ?? NSNull()])
         default:
             reply(["error": "unknown message"])
         }
@@ -80,7 +83,21 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         }
     }
 
+    /// The configured site's origin, `https://<host>`, from the app group; nil before setup.
+    /// The host is checked again here: the extension trusts no file it did not write.
+    static func site() -> String? {
+        guard let dir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup),
+              let data = try? Data(contentsOf: dir.appendingPathComponent(siteFile)),
+              let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let host = o["host"] as? String, !host.isEmpty,
+              host.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == ":") }) else {
+            return nil
+        }
+        return "https://" + host.lowercased()
+    }
+
     static func presence() -> [String: Any] {
+        guard site() != nil else { return ["present": false, "reason": "not-set-up"] }
         guard let dir = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup),
               let data = try? Data(contentsOf: dir.appendingPathComponent(loopbackFile)),
               let note = try? JSONDecoder().decode(Announcement.self, from: data) else {

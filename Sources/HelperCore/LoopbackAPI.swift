@@ -29,16 +29,19 @@ public struct LoopbackAPI: Sendable {
     public let name: String
     public let jobs: ProResJobs
     public let pairing: Pairing
-    /// Called for every request with the right token: the bridge reached the app.
+    /// Called for every request with the right token and site: the bridge reached the app.
     public let seen: (@Sendable () -> Void)?
+    /// The configured site's origin (`https://<host>`), read at every request; nil before setup.
+    public let site: @Sendable () -> String?
 
     public init(token: String, version: String, name: String, jobs: ProResJobs, pairing: Pairing,
-                seen: (@Sendable () -> Void)? = nil) {
+                site: @escaping @Sendable () -> String?, seen: (@Sendable () -> Void)? = nil) {
         self.token = token
         self.version = version
         self.name = name
         self.jobs = jobs
         self.pairing = pairing
+        self.site = site
         self.seen = seen
     }
 
@@ -59,7 +62,7 @@ public struct LoopbackAPI: Sendable {
         if req.method == "OPTIONS" {
             var headers = cors(origin)
             headers += [("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS"),
-                        ("Access-Control-Allow-Headers", "X-Slipstream-Token, Content-Type, Content-Range, Range"),
+                        ("Access-Control-Allow-Headers", "X-Slipstream-Token, X-Slipstream-Site, Content-Type, Content-Range, Range"),
                         ("Access-Control-Max-Age", "600")]
             if req.header("access-control-request-private-network") != nil {
                 headers.append(("Access-Control-Allow-Private-Network", "true"))
@@ -69,6 +72,10 @@ public struct LoopbackAPI: Sendable {
         var response: HTTPResponse
         if !Self.sameToken(req.header("x-slipstream-token") ?? "", token) {
             response = Self.problem(JobError("bad-request", "Falsches Token."), status: 403)
+        } else if site() == nil || req.header("x-slipstream-site") != site() {
+            // The bridge names the page it serves; anything but the configured site, or no site
+            // set up yet, gets nothing (docs/traps.md, "Origins").
+            response = Self.problem(JobError("bad-request", "Nicht die eingerichtete Funkhaus-Seite."), status: 403)
         } else {
             seen?()
             do {
