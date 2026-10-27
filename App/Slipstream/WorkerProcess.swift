@@ -48,6 +48,11 @@ final class WorkerProcess: @unchecked Sendable {
             "--whisper-cli", Paths.helper("whisper-cli").path, "--whisper-models", Paths.models.path,
             "--control", "stdio",
         ] + (Paths.whisperVersion.map { ["--whisper-version", $0] } ?? [])
+        // The toolchain's fonts for libass and its fc-list first on PATH (docs/tools.md,
+        // "Captions"); the worker would look for the fonts beside ffmpeg, outside Resources.
+        process.environment = WorkerEnvironment.make(
+            base: ProcessInfo.processInfo.environment, helpers: Paths.helper("ffmpeg").deletingLastPathComponent().path,
+            fontsConf: Paths.fontsConf?.path, cache: Paths.caches.path)
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors

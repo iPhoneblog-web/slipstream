@@ -98,7 +98,7 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | [docs/funkhaus-api.md](docs/funkhaus-api.md) | What a Funkhaus offers Slipstream: the well-known file, the page's messages, pairing |
 | [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
-| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, whisper.cpp: encode-queue's toolchain |
+| [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, libass and its fonts, whisper.cpp: encode-queue's toolchain |
 | [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |
 | [docs/traps.md](docs/traps.md) | Safari, priority, encoding and signing traps |
 | [docs/anleitung.md](docs/anleitung.md) | The menu and what helps when something fails, in German, the app's language |

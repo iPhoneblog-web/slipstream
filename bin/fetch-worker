@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Fetches what Slipstream embeds from kyrios/encode-queue's release: the worker's macOS arm64
 # binary into build/worker/encode-worker, and the macOS arm64 toolchain (ffmpeg, ffprobe,
-# whisper-cli, versions.txt) into build/tools (docs/worker.md, docs/tools.md). One build,
+# fc-list, whisper-cli, versions.txt, fonts/ with Inter and fonts.conf) into build/tools (docs/worker.md, docs/tools.md). One build,
 # encode-queue's, runs on the server and on the Mac.
 #
 # The tag and both files' sha256 are pinned here. Anything else fails: a moved tag or a
@@ -10,11 +10,11 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 repo=kyrios/encode-queue
-tag=v0.2.4
+tag=v0.2.7
 worker=encode-worker-darwin-arm64
-worker_sha256=089166e302b2b8918886df19199a250fed62231bb4cd9d7ebdf3593de515d2ae
+worker_sha256=6871ef259575d7867227ad8d97af14ad179e173cec10d7440bece77cc39445b3
 toolchain=encode-toolchain-darwin-arm64.tar.gz
-toolchain_sha256=de3c0c606150ba0fece51765ccd9bf2bb90fe4b666c1681ccc0611bd0d7dd396
+toolchain_sha256=398d930ee38df4a54a2e2cacae7a8a8f4199baf2d56db703177fb2676dc8fece
 
 rm -rf build/worker build/tools build/fetch
 mkdir -p build/worker build/tools build/fetch
@@ -31,11 +31,13 @@ tar xzf $toolchain -C ../tools --strip-components 1
 cd ..
 rm -rf fetch
 
-for f in worker/encode-worker tools/ffmpeg tools/ffprobe tools/whisper-cli; do
+for f in worker/encode-worker tools/ffmpeg tools/ffprobe tools/fc-list tools/whisper-cli; do
   [[ -x $f ]] || { print "missing in $tag: $f" >&2; exit 1; }
   file $f | grep -q 'Mach-O 64-bit executable arm64' || { print "$f is not a macOS arm64 binary" >&2; exit 1; }
 done
 [[ -f tools/versions.txt ]] || { print "missing in $tag: versions.txt" >&2; exit 1; }
+# Toolchain 3: the captions' fonts, the only ones libass sees (docs/tools.md, "Captions").
+[[ -f tools/fonts/fonts.conf && -f tools/fonts/Inter-ExtraBold.ttf ]] || { print "missing in $tag: fonts/" >&2; exit 1; }
 grep -q 'MIT License' worker/LICENSE || { print "encode-queue $tag: no MIT licence" >&2; exit 1; }
 # From toolchain 2 on the tarball carries each component's licence and SOURCES.md.
 [[ -s tools/licenses/SOURCES.md ]] && print "licences: $(ls tools/licenses | tr '\n' ' ')"

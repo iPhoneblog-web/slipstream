@@ -5,16 +5,33 @@ text. So there is one toolchain, built from source by
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue) for Linux and for macOS arm64
 (decided 2026-10-26), and Slipstream embeds the macOS build of its release:
 `bin/fetch-worker` downloads it beside the worker, checks it against the release's
-`SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe` and `whisper-cli` into
-`Contents/Helpers`, and `versions.txt` into `Contents/Resources`. This repository builds no tool of its own.
+`SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe`, `fc-list` and `whisper-cli` into
+`Contents/Helpers`, and `versions.txt` and `fonts/` into `Contents/Resources`. This repository
+builds no tool of its own.
 
-The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `whisper-cli`
-and `versions.txt`, static, whisper.cpp with Metal. Its versions are encode-queue's, the same on
-the server's worker image and on the Mac (toolchain 2 from encode-queue `v0.2.4` on, the same binaries as toolchain 1 with their licences: ffmpeg 9.0.2, libx265 4.3,
-libx264 core 165 r3222, libvmaf 3.2.1, whisper.cpp v1.9.5); `versions.txt` names them, and About
-shows it. `bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to
-those lines. The Mac toolchain has no
-libass, so a Mac announces no fonts and gets no jobs with burnt-in captions.
+The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `fc-list`,
+`whisper-cli`, `versions.txt` and `fonts/`, static, whisper.cpp with Metal. Its versions are
+encode-queue's, the same on the server's worker image and on the Mac: toolchain 3, from
+encode-queue `v0.2.7` on (ffmpeg 9.0.2, libx265 4.3, libx264 core 165 r3222, libvmaf 3.2.1,
+lame 3.100, whisper.cpp v1.9.5, libass 0.17.5). `versions.txt` names them, and About shows it.
+`bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to those
+lines.
+
+## Captions
+
+Toolchain 3 builds libass and its stack (HarfBuzz, FriBidi, FreeType, fontconfig) from source on
+Linux and macOS, so a Mac burns in the same captions as the server. `fonts/` holds Inter and a
+`fonts.conf` that sees only those fonts. The worker would look for it beside ffmpeg, in
+`Contents/fonts`, where a signed bundle keeps nothing; so the app starts the worker with
+`FONTCONFIG_FILE` pointing at `Contents/Resources/fonts/fonts.conf`, fontconfig's cache in
+`~/Library/Caches/io.github.kyrios.slipstream`, and `Contents/Helpers` first on `PATH`, so the
+worker lists fonts with the toolchain's `fc-list` (`HelperCore/WorkerProtocol.swift`,
+`WorkerEnvironment`). `bin/package` refuses a worker without `fc-list` and `fonts/`.
+
+**Open:** encode-worker `v0.2.7` reads libass's version only from a `versions.txt` beside
+ffmpeg, where codesign allows no data; so a Mac reports no libass and the queue gives it no
+caption job, though its ffmpeg renders them. It needs a worker flag for the versions file, as
+`--whisper-version` is for whisper.cpp (docs/TODO.md).
 
 - **When encode-queue's toolchain changes**, a new Slipstream embeds it. Until then the queue
   gives the Macs no rungs, and the menu says which tool differs.

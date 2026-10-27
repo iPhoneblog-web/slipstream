@@ -151,6 +151,17 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"model","name":"ggml-large-v3-turbo.bin","sha256":"ab","state":"downloading","bytes":1000,"bytes_done":250}"#),
+                       .model(.init(name: "ggml-large-v3-turbo.bin", sha256: "ab", state: "downloading", bytes: 1000, bytesDone: 250)))
+        guard case .model(let ready) = WorkerEvent.parse(#"{"event":"model","name":"ggml-small.bin","sha256":"cd","state":"ready","speed":12.5}"#) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(ready.speed, 12.5)
+        XCTAssertNil(ready.fraction)
+        XCTAssertEqual(WorkerEvent.Model(name: "m", sha256: "s", state: "downloading", bytes: 0, bytesDone: 0).fraction, nil)
+        XCTAssertEqual(WorkerEvent.Model(name: "m", sha256: "s", state: "downloading", bytes: 100, bytesDone: 150).fraction, 1)
+        // A model event without its name is no model.
+        XCTAssertNil(WorkerEvent.parse(#"{"event":"model","state":"ready"}"#))
         XCTAssertNil(WorkerEvent.parse("not json"))
     }
 
@@ -160,6 +171,20 @@ final class WorkerProtocolTests: XCTestCase {
                        "{\"cmd\":\"limits\",\"gpu\":true,\"jobs\":1,\"threads\":8}\n")
         XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0)).line,
                        "{\"cmd\":\"pause\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
+    }
+
+    func testEnvironment() {
+        let env = WorkerEnvironment.make(base: ["PATH": "/usr/bin:/H:/bin", "HOME": "/u"], helpers: "/H",
+                                         fontsConf: "/R/fonts/fonts.conf", cache: "/C")
+        XCTAssertEqual(env["PATH"], "/H:/usr/bin:/bin")
+        XCTAssertEqual(env["FONTCONFIG_FILE"], "/R/fonts/fonts.conf")
+        XCTAssertEqual(env["XDG_CACHE_HOME"], "/C")
+        XCTAssertEqual(env["HOME"], "/u")
+        // A FONTCONFIG_FILE already set stays; no fonts in the app, none set; no PATH, the system's.
+        XCTAssertEqual(WorkerEnvironment.make(base: ["FONTCONFIG_FILE": "/x.conf"], helpers: "/H", fontsConf: "/R/f.conf", cache: "/C")["FONTCONFIG_FILE"], "/x.conf")
+        let bare = WorkerEnvironment.make(base: [:], helpers: "/H", fontsConf: nil, cache: "/C")
+        XCTAssertNil(bare["FONTCONFIG_FILE"])
+        XCTAssertEqual(bare["PATH"], "/H:/usr/bin:/bin:/usr/sbin:/sbin")
     }
 
     func testLineBuffer() {

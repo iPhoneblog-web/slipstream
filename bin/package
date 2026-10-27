@@ -52,13 +52,16 @@ python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$appex/Contents/R
 helpers="$app/Contents/Helpers"
 mkdir -p "$helpers"
 cp "$cli_dir/slipstream-cli" "$helpers/"
-for f in build/tools/ffmpeg build/tools/ffprobe build/tools/whisper-cli build/worker/encode-worker; do
+for f in build/tools/ffmpeg build/tools/ffprobe build/tools/fc-list build/tools/whisper-cli build/worker/encode-worker; do
   [[ -f $f ]] && cp "$f" "$helpers/"
 done
 # Data is no code: codesign takes only executables in Contents/Helpers.
 for f in build/tools/versions.txt build/tools/versions.json; do
   [[ -f $f ]] && cp "$f" "$app/Contents/Resources/"
 done
+# Resources/fonts: Inter and the fonts.conf that sees only it, for libass's captions; the worker
+# gets FONTCONFIG_FILE pointing there (docs/tools.md, "Captions").
+[[ -d build/tools/fonts ]] && ditto build/tools/fonts "$app/Contents/Resources/fonts"
 # Resources/licenses: Slipstream's own (MIT), encode-worker's (MIT), and the toolchain's folder:
 # each component's licence and SOURCES.md, with where the source is. ffmpeg and ffprobe are
 # GPLv3 programs; the app ships them only with these (docs/tools.md, "Licences").
@@ -75,6 +78,11 @@ if [[ -x "$helpers/ffmpeg" && ! -s "$lic/SOURCES.md" ]]; then
 fi
 # REQUIRE_WORKER=1 (CI) refuses the ProRes-only fallback.
 if [[ -x "$helpers/encode-worker" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
+  # Toolchain 3 on: captions need the toolchain's fc-list and fonts, or libass takes another font.
+  if [[ ! -x "$helpers/fc-list" || ! -f "$app/Contents/Resources/fonts/fonts.conf" ]]; then
+    print "the worker without fc-list or Resources/fonts: run bin/fetch-worker (toolchain 3 or later)" >&2
+    exit 1
+  fi
   print "embedded: encode-worker $("$helpers/encode-worker" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
 elif [[ -n ${REQUIRE_WORKER:-} ]]; then
   print "no worker or tools in build/: run bin/fetch-worker" >&2
