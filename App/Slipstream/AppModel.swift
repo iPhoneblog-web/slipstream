@@ -65,7 +65,9 @@ final class AppModel: ObservableObject {
         if extensionSeen.map({ at > $0 }) ?? true { extensionSeen = at }
     }
 
-    static let uploadCenter = URL(string: "https://funkhaus.iphoneblog.de/")!
+    /// The old address on purpose: funkhaus.iphoneblog.de has no DNS yet, and this one keeps
+    /// working after the move as a redirect.
+    static let uploadCenter = URL(string: "https://upload.iphoneblog.de/")!
     static let releases = URL(string: "https://github.com/iPhoneblog-web/slipstream/releases/latest")!
 
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
