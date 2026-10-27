@@ -228,3 +228,15 @@ final class SiteConfigTests: XCTestCase {
         XCTAssertNil(SiteConfig.load(from: dir))
     }
 }
+
+final class UnreachableTests: XCTestCase {
+    /// The setup window says the cause in one sentence, the DNS case first: a Funkhaus whose
+    /// host has no DNS entry yet.
+    func testCauses() {
+        XCTAssertEqual(SiteConfig.unreachable("funkhaus.example.org", .cannotFindHost), "Für funkhaus.example.org gibt es keinen DNS-Eintrag.")
+        XCTAssertEqual(SiteConfig.unreachable("a.b", .dnsLookupFailed), "Für a.b gibt es keinen DNS-Eintrag.")
+        XCTAssertEqual(SiteConfig.unreachable("a.b", .timedOut), "a.b antwortet nicht (Zeitüberschreitung).")
+        XCTAssertEqual(SiteConfig.unreachable("a.b", .serverCertificateUntrusted), "Mit a.b kommt keine sichere Verbindung zustande (Zertifikat).")
+        XCTAssertEqual(SiteConfig.unreachable("a.b", nil), "a.b ist nicht erreichbar.")
+    }
+}

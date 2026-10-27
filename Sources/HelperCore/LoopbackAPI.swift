@@ -75,7 +75,7 @@ public struct LoopbackAPI: Sendable {
         } else if site() == nil || req.header("x-slipstream-site") != site() {
             // The bridge names the page it serves; anything but the configured site, or no site
             // set up yet, gets nothing (docs/traps.md, "Origins").
-            response = Self.problem(JobError("bad-request", "Nicht die eingerichtete Funkhaus-Seite."), status: 403)
+            response = Self.problem(JobError("bad-request", "Nicht das eingerichtete Funkhaus."), status: 403)
         } else {
             seen?()
             do {

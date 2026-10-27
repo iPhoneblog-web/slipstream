@@ -24,13 +24,16 @@ struct SlipstreamApp: App {
 final class Windows {
     private var open: [String: NSWindow] = [:]
 
-    func show<V: View>(_ id: String, title: String, size: NSSize, resizable: Bool = false, _ view: () -> V) {
+    /// `size` nil: the window follows its content's size (the setup window grows with a message).
+    func show<V: View>(_ id: String, title: String, size: NSSize?, resizable: Bool = false, _ view: () -> V) {
         let window = open[id] ?? {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: view()))
+            let host = NSHostingController(rootView: view())
+            if size == nil { host.sizingOptions = [.preferredContentSize] }
+            let w = NSWindow(contentViewController: host)
             w.title = title
             w.identifier = NSUserInterfaceItemIdentifier(id)
             w.styleMask = resizable ? [.titled, .closable, .resizable, .miniaturizable] : [.titled, .closable]
-            w.setContentSize(size)
+            if let size { w.setContentSize(size) }
             w.isReleasedWhenClosed = false
             w.center()
             open[id] = w
@@ -271,6 +274,8 @@ struct SettingsView: View {
     @AppStorage("gpu") private var gpu = true
     @AppStorage("jobs") private var jobs = 1
     @State private var identity: PairingIdentity?
+    /// The real state: the user can turn it off in System Settings → Allgemein → Anmeldeobjekte.
+    @State private var loginItem = LoginItem.isOn
 
     var body: some View {
         Form {
@@ -285,8 +290,9 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Funkhaus") {
-                LabeledContent("Seite", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
-                Button("Andere Seite einrichten …") { model.showSetup() }
+                LabeledContent("Funkhaus", value: model.site.map { "\($0.name) (\($0.host))" } ?? "nicht eingerichtet")
+                Button("Anderes Funkhaus einrichten …") { model.showSetup() }
+                Toggle("Bei der Anmeldung starten", isOn: Binding(get: { loginItem }, set: { LoginItem.set($0); loginItem = LoginItem.isOn }))
             }
             Section("Kopplung") {
                 if let identity {
@@ -306,26 +312,32 @@ struct SettingsView: View {
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
         .task { identity = try? await AppPairing { _ in }.identity() }
+        .onAppear { loginItem = LoginItem.isOn }
     }
 }
 
-/// First launch, and "Andere Seite einrichten": the Funkhaus site, checked before it is kept.
+/// First launch, and "Anderes Funkhaus einrichten": the Funkhaus, checked before it is kept.
 struct SetupView: View {
     @ObservedObject var model: AppModel
     @State private var host = ""
     @State private var problem: String?
     @State private var busy = false
+    @State private var atLogin = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Für welche Funkhaus-Seite arbeitet dieser Mac?").font(.headline)
-            Text("Slipstream und seine Safari-Extension antworten nur dieser Seite.")
+            Text("Für welches Funkhaus arbeitet dieser Mac?").font(.headline)
+            Text("Slipstream und seine Safari-Extension antworten nur diesem Funkhaus.")
                 .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             TextField("funkhaus.example.org", text: $host)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { check() }
+            Toggle("Bei der Anmeldung starten", isOn: $atLogin)
             if let problem {
                 Text(problem).font(.callout).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             } else if let site = model.site {
                 Text("Eingerichtet: \(site.name) (\(site.host))").font(.callout)
             }
@@ -339,7 +351,11 @@ struct SetupView: View {
         }
         .padding(20)
         .frame(width: 480)
-        .onAppear { host = model.site?.host ?? "" }
+        .onAppear {
+            host = model.site?.host ?? ""
+            // A first setup starts at login by default; setting up another Funkhaus shows how it is.
+            if model.site != nil { atLogin = LoginItem.isOn }
+        }
     }
 
     private func check() {
@@ -348,7 +364,10 @@ struct SetupView: View {
         Task {
             problem = await model.checkSite(host)
             busy = false
-            if problem == nil { NSApp.keyWindow?.close() }
+            if problem == nil {
+                LoginItem.set(atLogin)
+                NSApp.keyWindow?.close()
+            }
         }
     }
 }

@@ -27,7 +27,9 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    host, such as `funkhaus.example.org`, and choose **Prüfen und speichern**. Slipstream fetches
    `https://<host>/.well-known/funkhaus.json` and keeps the site only if it answers as a
    Funkhaus speaking a protocol this version knows. Until then the menu offers only
-   **Einrichten …**. Settings can change the site later.
+   **Einrichten …**. Settings can change the site later. **Bei der Anmeldung starten**, on by
+   default, makes Slipstream a login item; Settings and System Settings → General → Login Items
+   can turn it off.
 3. **Turn the extension on.** Safari → Settings → Extensions → tick **Slipstream**. Safari says
    the extension can read and change pages on **all websites** ("alle Websites"): it is matched to
    every https page because the site is your choice, not the manifest's, but it answers only the
@@ -36,8 +38,6 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
 4. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu now says
    "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
    "Diesen Mac als Helper hinzufügen".
-5. **Optional:** System Settings → General → Login Items → add Slipstream, so it starts with
-   every login.
 
 An update: when the menu says "Update verfügbar", download the new DMG and replace the app. The
 site, the extension and the pairing stay.

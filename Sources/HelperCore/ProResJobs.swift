@@ -107,7 +107,7 @@ public actor ProResJobs {
         var ranges: ByteRanges
         var sourceName: String
         /// The Funkhaus site (origin) that made the job. Only that site sees, reads or deletes
-        /// it: after "Andere Seite einrichten" the new site does not reach the old one's files.
+        /// it: after "Anderes Funkhaus einrichten" the new site does not reach the old one's files.
         var site: String?
     }
 

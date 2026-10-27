@@ -64,7 +64,7 @@ final class AppModel: ObservableObject {
     private let siteBox = SiteBox()
 
     func showSetup() {
-        windows.show("setup", title: "Slipstream einrichten", size: NSSize(width: 480, height: 260)) {
+        windows.show("setup", title: "Slipstream einrichten", size: nil) {
             SetupView(model: self)
         }
     }
@@ -86,7 +86,8 @@ final class AppModel: ObservableObject {
             }
             data = body
         } catch {
-            return "\(host) ist nicht erreichbar: \(error.localizedDescription)"
+            log.info("setup: \(host, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return SiteConfig.unreachable(host, (error as? URLError)?.code)
         }
         do {
             let found = try SiteConfig.check(host: host, wellKnown: data, appVersion: version)

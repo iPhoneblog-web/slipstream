@@ -63,6 +63,26 @@ public struct SiteConfig: Codable, Equatable, Sendable {
         return host
     }
 
+    /// Why the well-known file could not be fetched, in one plain German sentence for the setup
+    /// window: the cause, not the system's long message.
+    public static func unreachable(_ host: String, _ code: URLError.Code?) -> String {
+        switch code {
+        case .cannotFindHost?, .dnsLookupFailed?:
+            return "Für \(host) gibt es keinen DNS-Eintrag."
+        case .notConnectedToInternet?, .networkConnectionLost?:
+            return "Dieser Mac ist gerade nicht mit dem Internet verbunden."
+        case .cannotConnectToHost?:
+            return "\(host) nimmt keine Verbindung an."
+        case .timedOut?:
+            return "\(host) antwortet nicht (Zeitüberschreitung)."
+        case .secureConnectionFailed?, .serverCertificateUntrusted?, .serverCertificateHasBadDate?,
+             .serverCertificateNotYetValid?, .serverCertificateHasUnknownRoot?, .clientCertificateRejected?:
+            return "Mit \(host) kommt keine sichere Verbindung zustande (Zertifikat)."
+        default:
+            return "\(host) ist nicht erreichbar."
+        }
+    }
+
     /// The well-known file's URL for a host from `host(from:)`; nil for anything that is none.
     public static func wellKnown(_ host: String) -> URL? {
         URL(string: "https://\(host)/.well-known/funkhaus.json")

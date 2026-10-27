@@ -42,7 +42,7 @@ The content script answers on the same window, with the same `id` in `re`:
   helper: { present: false, reason: "not-running" } }       // or "too-old"
 ```
 
-- **No answer within 1 s** means no extension. The page then treats the helper as absent too:
+- **No answer within 3 s** (and no `ready`, see below) means no extension. The page then treats the helper as absent too:
   for a ProRes file it shows that ProRes is not supported here and that it works with Slipstream
   running, and uploads nothing (ADR-0007 §7, step 2).
 - The page reads only messages with `ev.source === window`, `ev.data.slipstream === 1` and a
@@ -50,11 +50,32 @@ The content script answers on the same window, with the same `id` in `re`:
 - A page may say `hello` again at any time (after the user starts Slipstream, say). Each answer
   with `present: true` carries a new port; the page drops the old one.
 
+**`ready`, unasked (since 1.1.1).** On the configured site the content script also posts, at
+`document_start`, again at `DOMContentLoaded` and at `load`:
+
+```js
+{ slipstream: 1, type: "ready", extension: "1.1.1", protocol: 1 }
+```
+
+It carries no port and needs no answer. It tells a page that its hello may now be answered.
+
+**What the page should do**, so a slow first answer does not read as "no extension":
+
+- Wait **3 s** for the first hello's answer, not 1 s. The extension answers on the site only once
+  it knows the page is the site and whether the app runs; both are native-messaging round trips,
+  and the first after Safari starts also starts the extension's background and app extension.
+  The content script asks both at `document_start`, before the page does, and answers without
+  waiting for the bridge frame, so a warm answer takes milliseconds.
+- When a `ready` arrives and the page holds no port (no answer yet, or the answer said the
+  helper is absent), say `hello` again.
+- Say `hello` again when the tab becomes visible (`visibilitychange`) and the page holds no
+  port: the user may have started Slipstream meanwhile.
+
 **The three states** the hello tells apart, for the upload center's banner on a Mac in Safari:
 
 | hello | state | the banner |
 |---|---|---|
-| no answer within 1 s | the extension is missing or turned off | install Slipstream, turn the extension on |
+| no answer within 3 s, and no `ready` | the extension is missing, turned off, or not allowed on this site | install Slipstream, turn the extension on and allow it here |
 | `helper.present: false` | the extension runs, the app does not | "Slipstream starten" (`launch`, below) |
 | `helper.present: true` | both run | none |
 
