@@ -10,9 +10,9 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 repo=kyrios/encode-queue
-tag=v0.2.8
+tag=v0.2.12
 worker=encode-worker-darwin-arm64
-worker_sha256=ae4ee0c289efa092a70128f82be5b0a44f8ebbf70c409560531105b5986ab513
+worker_sha256=2a9a1ef1472f6a552bf53007e20fa363fbd7bb564770d86e86198e2f187f8f52
 toolchain=encode-toolchain-darwin-arm64.tar.gz
 toolchain_sha256=398d930ee38df4a54a2e2cacae7a8a8f4199baf2d56db703177fb2676dc8fece
 
