@@ -4,8 +4,10 @@
 # With `-cycleSettingsTabs YES` Settings shows each tab once. Then it hands the app a connect
 # link (slipstream://connect?site=…, docs/funkhaus-api.md): the setup window must open beside
 # Settings, and no site may be saved, since only the user's "Verbinden" saves one. From the
-# app's "settings tabs: start" on, its watchdog must log no "main thread blocked" (100 ms or
-# more; docs/traps.md, "A frozen Settings window"). Runs in CI after bin/package. It refuses to run beside another
+# app's "settings tabs: start" on, its watchdog must log no wait of the main thread of 250 ms or
+# more (docs/traps.md, "A frozen Settings window"); it logs from 100 ms, and those are shown with
+# the app's log around them. 1.3.0's daemon call took 500 ms and more per call; a runner, a VM
+# slower than a Mac, may need over 100 ms for a tab's first layout. Runs in CI after bin/package. It refuses to run beside another
 # Slipstream: two apps would share one app group file, the one the Safari extension reads.
 #   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
 set -euo pipefail
@@ -76,10 +78,16 @@ if (( ! had_site )) && [[ -f $site ]]; then
 fi
 print "connect link: ok"
 
-blocked=$(/usr/bin/log show --start "$launched_at" --predicate 'subsystem == "io.github.kyrios.slipstream"' \
-  --style compact 2>/dev/null | awk '/settings tabs: start/ { on = 1 } on && /main thread blocked/' || true)
-if [[ -n $blocked ]]; then
-  print "the main thread waited while Settings and the link ran:\n$blocked" >&2
-  exit 1
+timeline=$(/usr/bin/log show --start "$launched_at" --predicate 'subsystem == "io.github.kyrios.slipstream"' \
+  --style compact 2>/dev/null | awk '/settings tabs: start/ { on = 1 } on' || true)
+waits=$(print -r -- "$timeline" | grep -o 'main thread blocked [0-9]*' | awk '{ print $4 }' || true)
+if [[ -n $waits ]]; then
+  print "the app's log from the tab cycle on:\n$timeline"
 fi
-print "main thread: never blocked for 100 ms or more"
+for ms in ${(f)waits}; do
+  if (( ms >= 250 )); then
+    print "the main thread waited $ms ms while Settings and the link ran" >&2
+    exit 1
+  fi
+done
+print "main thread: no wait of 250 ms or more${waits:+ (from 100 ms: ${(j:, :)${(f)waits}} ms)}"

@@ -317,6 +317,7 @@ struct SettingsView: View {
             log.notice("settings tabs: start")
             for t in ["performance", "site", "pairing", "general"] {
                 try? await Task.sleep(nanoseconds: 700_000_000)
+                log.notice("settings tab: \(t, privacy: .public)")
                 tab = t
             }
             log.notice("settings tabs cycled")

@@ -86,8 +86,10 @@ question for that page's own host:
   items; a toggle made four such calls. Now `LoginItem` is async and runs off the main thread,
   and so do the keychain read for "Kopplung" and the models' disk use; the app group's URL and
   the Mac's name are read once (`Host.current()` waits on DNS). `Watchdog` logs "main thread
-  blocked N ms" whenever the main queue takes 100 ms or more, and `bin/check-launch` fails on
-  such a line while Settings goes through its tabs. Nothing in a view's body or its `@State`
+  blocked N ms" whenever the main queue takes 100 ms or more. `bin/check-launch` goes through the
+  Settings tabs and a connect link and fails on a wait of 250 ms or more; it shows those from
+  100 ms with the app's log around them (a CI runner may need over 100 ms for a tab's first
+  layout). Nothing in a view's body or its `@State`
   initial values may call a daemon, the keychain or the disk.
 - **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
   Settings has four tabs, each as tall as its content, in a resizable window with a minimum
