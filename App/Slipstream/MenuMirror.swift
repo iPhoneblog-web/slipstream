@@ -30,7 +30,14 @@ final class MenuMirror: ObservableObject {
 
         /// Every line the menu shows as text.
         var all: [String] {
-            [state] + [problem].compactMap { $0 } + job + results + [today, connection] + extensionLines + refused
+            var out = [state]
+            if let problem { out.append(problem) }
+            out += job
+            out += results
+            out += [today, connection]
+            out += extensionLines
+            out += refused
+            return out
         }
     }
 
