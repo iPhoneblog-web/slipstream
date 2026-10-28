@@ -147,6 +147,26 @@ final class CPUChoiceTests: XCTestCase {
                        "CPU für den Encoder: 12 von 12 Kernen")
         XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: .init(threads: 3, cores: 12, throttled: 1)),
                        "CPU für den Encoder: 3 von 12 Kernen (laufender Auftrag gedrosselt)")
+        // The efficiency cores (encode-queue v0.2.17): the worker's word, else the setting.
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 12, cores: 12, inEffect: .init(threads: 12, cores: 12, efficiency: "all")),
+                       "CPU für den Encoder: nur Effizienzkerne")
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 12, cores: 12, inEffect: nil, efficiencyOnly: true), "CPU für den Encoder: nur Effizienzkerne")
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 12, cores: 12, inEffect: .init(threads: 12, cores: 12, efficiency: "archive")),
+                       "CPU für den Encoder: 12 von 12 Kernen")
+    }
+
+    /// "Nur Effizienzkerne" comes last among the counts on a Mac with efficiency cores, with the
+    /// slowdown measured on the Mac Studio; a Mac with one kind of core has none.
+    func testEfficiencyChoice() {
+        XCTAssertEqual(CPUChoice.efficiencySlowdown(perf: 8, eff: 4), 11) // M2 Max, as measured
+        XCTAssertNil(CPUChoice.efficiencySlowdown(perf: 0, eff: 0))
+        let o = CPUChoice.options(cores: 12, efficiencyCores: 4, slowdown: 11)
+        XCTAssertEqual(o.map(\.threads), [12, 9, 6, 3, CPUChoice.efficiencyTag])
+        XCTAssertEqual(o.last?.label, "Nur Effizienzkerne (4, etwa 11× langsamer)")
+        XCTAssertEqual(CPUChoice.options(cores: 8).map(\.threads), [8, 6, 4, 2])
+        XCTAssertEqual(Efficiency(only: true, archive: true), .all)
+        XCTAssertEqual(Efficiency(only: false, archive: true), .archive)
+        XCTAssertEqual(Efficiency(only: false, archive: false), .off)
     }
 }
 
@@ -237,7 +257,7 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"result","lease_id":"l1","title":"Folge 12","verdict":"accepted"}"#),
                        .result(leaseId: "l1", title: "Folge 12", verdict: "accepted", check: nil))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
-        XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil, mode: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"model","name":"ggml-large-v3-turbo.bin","sha256":"ab","state":"downloading","bytes":1000,"bytes_done":250}"#),
                        .model(.init(name: "ggml-large-v3-turbo.bin", sha256: "ab", state: "downloading", bytes: 1000, bytesDone: 250)))
@@ -288,12 +308,28 @@ final class WorkerProtocolTests: XCTestCase {
 
     func testCommands() {
         XCTAssertEqual(WorkerCommand.quit.line, "{\"cmd\":\"quit\"}\n")
-        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1, highSlots: 1).line,
-                       "{\"cmd\":\"limits\",\"gpu\":true,\"high_slots\":1,\"jobs\":1,\"threads\":8}\n")
-        XCTAssertEqual(WorkerCommand.limits(threads: 4, gpu: false, jobs: 2, highSlots: 0).line,
-                       "{\"cmd\":\"limits\",\"gpu\":false,\"high_slots\":0,\"jobs\":2,\"threads\":4}\n")
-        XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0)).line,
-                       "{\"cmd\":\"pause\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1, highSlots: 1, efficiency: .off).line,
+                       "{\"cmd\":\"limits\",\"efficiency\":\"off\",\"gpu\":true,\"high_slots\":1,\"jobs\":1,\"threads\":8}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 4, gpu: false, jobs: 2, highSlots: 0, efficiency: .archive).line,
+                       "{\"cmd\":\"limits\",\"efficiency\":\"archive\",\"gpu\":false,\"high_slots\":0,\"jobs\":2,\"threads\":4}\n")
+        XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0), mode: .now).line,
+                       "{\"cmd\":\"pause\",\"mode\":\"now\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
+        XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0), mode: .afterJob).line,
+                       "{\"cmd\":\"pause\",\"mode\":\"after_job\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
+    }
+
+    /// Pause (encode-queue v0.2.17; Thorsten, 2026-10-28: "Pause also wasn't working"): the
+    /// worker's word with its mode, and the menu's line for each way to pause.
+    func testPause() {
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":"2026-10-28T19:00:00Z","mode":"after_job"}"#),
+                       .paused(until: ISO8601DateFormatter().date(from: "2026-10-28T19:00:00Z"), mode: .afterJob))
+        // A worker before v0.2.17 says no mode, and an unknown one counts as none.
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null,"mode":"later"}"#), .paused(until: nil, mode: nil))
+        XCTAssertEqual(PauseMode.stateLine(until: "20:00", mode: .now, jobsRunning: true), "Pausiert bis 20:00")
+        XCTAssertEqual(PauseMode.stateLine(until: "20:00", mode: .afterJob, jobsRunning: true), "Pause nach diesem Auftrag, bis 20:00")
+        XCTAssertEqual(PauseMode.stateLine(until: "20:00", mode: .afterJob, jobsRunning: false), "Pausiert bis 20:00")
+        let held = WorkerJob(leaseId: "l1", title: "one_144_Hey_Siri", kind: "rung", rung: "2160", phase: "paused", fraction: 0.4)
+        XCTAssertEqual(held.menuTitle, "Angehalten: one_144_Hey_Siri · 40 %")
     }
 
     func testEnvironment() {

@@ -51,12 +51,15 @@ final class AppModel: ObservableObject {
     /// The worker's word on the CPU limit in effect (encode-queue v0.2.17); nil before it, and
     /// from a worker before v0.2.17, which says nothing: the menu shows the setting then.
     @Published private(set) var workerLimits: WorkerEvent.Limits?
-    /// The CPU setting, for the menu's line until the worker answers it.
+    /// The CPU settings, for the menu's line until the worker answers them.
     @Published private(set) var threadsSetting = 0
+    @Published private(set) var efficiencySetting = Efficiency.off
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
     @Published private(set) var finishedToday = 0
     @Published private(set) var pausedUntil: Date?
+    /// How the pause treats a running job (PauseMode); `.now` when not paused.
+    @Published private(set) var pauseMode = PauseMode.now
     @Published private(set) var logLines: [String] = []
     @Published private(set) var tools: [WorkerEvent.Tool] = []
     /// The whisper models the queue wants this Mac to hold, in the order the worker named them.
@@ -220,18 +223,40 @@ final class AppModel: ObservableObject {
 
     static let maxThreads = ProcessInfo.processInfo.activeProcessorCount
 
+    /// The Mac's performance and efficiency cores; 0, 0 with one kind (an Intel Mac).
+    static let coreLevels: (perf: Int, eff: Int) = {
+        func value(_ name: String) -> Int {
+            var n: Int32 = 0
+            var size = MemoryLayout<Int32>.size
+            return sysctlbyname(name, &n, &size, nil, 0) == 0 ? Int(n) : 0
+        }
+        guard value("hw.nperflevels") >= 2 else { return (0, 0) }
+        return (value("hw.perflevel0.logicalcpu"), value("hw.perflevel1.logicalcpu"))
+    }()
+    /// The embedded worker pauses after a job and runs jobs on the efficiency cores (encode-queue
+    /// v0.2.18; both came with its --efficiency flag). Without it the menu offers neither.
+    static let workerHasModes = WorkerProcess.takes("efficiency")
+    static var efficiencyCores: Int { workerHasModes ? coreLevels.eff : 0 }
+    /// "etwa 11× langsamer" beside the efficiency-core settings (CPUChoice.efficiencySlowdown).
+    static var efficiencySlowdown: Int? { CPUChoice.efficiencySlowdown(perf: coreLevels.perf, eff: coreLevels.eff) }
+
     var limits: WorkerProcess.Limits {
         let threads = defaults.integer(forKey: "threads")
         return WorkerProcess.Limits(threads: threads > 0 ? min(threads, Self.maxThreads) : Self.maxThreads,
                                     gpu: defaults.object(forKey: "gpu") as? Bool ?? true,
                                     jobs: max(1, defaults.integer(forKey: "jobs")),
-                                    highSlots: min(max(defaults.object(forKey: "highSlots") as? Int ?? 1, 0), 2))
+                                    highSlots: min(max(defaults.object(forKey: "highSlots") as? Int ?? 1, 0), 2),
+                                    efficiency: Self.efficiencyCores > 0
+                                        ? Efficiency(only: defaults.bool(forKey: "efficiencyOnly"), archive: defaults.bool(forKey: "archiveOnEfficiency"))
+                                        : .off)
     }
 
     func limitsChanged() {
         let l = limits
         threadsSetting = l.threads
-        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots))
+        efficiencySetting = l.efficiency
+        note("limits: \(l.threads) threads, gpu \(l.gpu), \(l.jobs) jobs, \(l.highSlots) high-priority slots, efficiency cores \(l.efficiency.rawValue)")
+        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots, efficiency: l.efficiency))
     }
 
     // MARK: - Start
@@ -239,10 +264,12 @@ final class AppModel: ObservableObject {
     func start() {
         setSite(SiteConfig.load(from: Paths.appGroup))
         threadsSetting = limits.threads
+        efficiencySetting = limits.efficiency
         // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).
         if site == nil { showSetup() }
         askLoginItemOnce()
         pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
+        pauseMode = defaults.string(forKey: "pauseMode").flatMap(PauseMode.init(rawValue:)) ?? .now
         if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
             finishedToday = defaults.integer(forKey: "todayCount")
         }
@@ -331,7 +358,7 @@ final class AppModel: ObservableObject {
             workerStartedAt = Date()
             connection = .down
             note("worker started, pid \(worker.pid)")
-            if let until = pausedUntil { worker.send(.pause(until: until)) }
+            if let until = pausedUntil { worker.send(.pause(until: until, mode: pauseMode)) }
         } catch {
             connection = .down
             stopped("Der Worker startet nicht: \(error.localizedDescription)", ranFor: 0)
@@ -413,8 +440,8 @@ final class AppModel: ObservableObject {
         case .result(let leaseId, let title, let verdict, let check):
             if let leaseId { queueJobs.end(lease: leaseId) }
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
-        case .paused(let until):
-            setPause(until, tellWorker: false)
+        case .paused(let until, let mode):
+            setPause(until, mode: mode ?? .now, tellWorker: false)
         case .update(let latest):
             updateAvailable = latest
         case .tools(let tools):
@@ -454,18 +481,32 @@ final class AppModel: ObservableObject {
 
     // MARK: - Pause
 
-    func pause(for seconds: TimeInterval) {
-        setPause(Date().addingTimeInterval(seconds), tellWorker: true)
+    func pause(for seconds: TimeInterval, mode: PauseMode) {
+        setPause(Date().addingTimeInterval(seconds), mode: mode, tellWorker: true)
+    }
+
+    /// "Sofort anhalten" during a pause after the job: the same pause, now.
+    func pauseNow() {
+        guard let until = pausedUntil else { return }
+        setPause(until, mode: .now, tellWorker: true)
     }
 
     func resume() {
-        setPause(nil, tellWorker: true)
+        setPause(nil, mode: .now, tellWorker: true)
     }
 
-    private func setPause(_ until: Date?, tellWorker: Bool) {
+    private func setPause(_ until: Date?, mode: PauseMode, tellWorker: Bool) {
+        let changed = until != pausedUntil || mode != pauseMode
         pausedUntil = until
+        pauseMode = until == nil ? .now : mode
         defaults.set(until, forKey: "pausedUntil")
-        if tellWorker { worker?.send(until.map { .pause(until: $0) } ?? .resume) }
+        defaults.set(pauseMode.rawValue, forKey: "pauseMode")
+        guard tellWorker else { return }
+        // In the log file too (Thorsten, 2026-10-28: "Pause also wasn't working", and nothing
+        // said whether the menu's pause reached the worker).
+        if changed { note(until.map { "pause until \($0.formatted(date: .omitted, time: .shortened)), \(mode.rawValue)" } ?? "resume") }
+        if worker == nil, until != nil { note("no worker running: the pause waits for its start") }
+        worker?.send(until.map { .pause(until: $0, mode: mode) } ?? .resume)
     }
 
     private func tick() {
@@ -473,7 +514,7 @@ final class AppModel: ObservableObject {
         if let at = (try? FileManager.default.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date {
             markExtensionSeen(at)
         }
-        if let until = pausedUntil, until <= Date() { setPause(nil, tellWorker: false) }
+        if let until = pausedUntil, until <= Date() { setPause(nil, mode: .now, tellWorker: false) }
         // A job that ends beside another sends no event of its own (RunningJobs).
         var jobs = queueJobs
         if jobs.expire() {

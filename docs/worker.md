@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.15`, toolchain 3; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.17`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
@@ -19,6 +19,7 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
   --state-dir <support>/worker --name <Mac name> --host-app-name Slipstream --host-app-version <x.y.z>
   --threads N --gpu true|false --jobs N
   --high-slots N   (only when the worker's -h lists it, v0.2.14 on)
+  --efficiency off|all|archive   (only when the worker's -h lists it, v0.2.18 on)
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
   --whisper-version <from Resources/versions.txt>
@@ -36,9 +37,9 @@ After it, one JSON object per line:
 
 | line | does |
 |---|---|
-| `{"cmd":"pause","until":"<RFC 3339>"}` | the menu's pause: suspend, give the job back after the queue's `pause_give_back_s`, claim nothing until then |
+| `{"cmd":"pause","until":"<RFC 3339>","mode":"now"}` | the menu's pause (below): claim nothing until then; `mode` `now` suspends the running job, `after_job` lets it finish (v0.2.18; a worker before pauses as `now`) |
 | `{"cmd":"resume"}` | end the pause |
-| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N,"high_slots":N}` | the settings changed, at once: the next tool starts with them, and from v0.2.17 a running tool that started with more threads is held to `threads` (below); a worker before v0.2.14 ignores `high_slots` |
+| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N,"high_slots":N,"efficiency":"off"}` | the settings changed, at once: the next tool starts with them, and from v0.2.17 a running tool that started with more threads is held to `threads` (below); `efficiency` `off`, `all` or `archive` (v0.2.18); a worker before v0.2.14 ignores `high_slots`, one before v0.2.18 `efficiency` |
 | `{"cmd":"quit"}` | give every lease back (reason `quit`) and exit; also on end of input |
 
 **Two kinds of slots** (encode-queue v0.2.14): Settings → Leistung, "Aufträge gleichzeitig"
@@ -56,6 +57,29 @@ so it averages the limit's cores and loses no work. A higher limit frees it at o
 tells the queue the new limit at once too, so its estimates plan with it. encode-queue's README,
 "The CPU limit", has the measurements.
 
+**Pause** (encode-queue v0.2.18; Thorsten, 2026-10-28: "Pause also wasn't working"). The menu's
+"Pause" offers "Sofort pausieren" and, while a queue job runs, "Nach diesem Auftrag", for
+30 minutes, 2 hours or 24 hours. Either way the Mac claims nothing from that moment and the
+queue hears it at once. "Sofort pausieren" stops the running tool: an archive or stage 2 job
+stays with the Mac, suspended, and goes on where it stood when the pause ends (up to 24 h); a
+Sofort or stage 1 job, which a person waits for, goes back to the queue after a minute, for
+another Mac. "Nach diesem Auftrag" lets the job finish first; "Laufenden Auftrag sofort anhalten"
+then switches to the first way. The menu says "Pausiert bis 20:00", or "Pause nach diesem
+Auftrag, bis 20:00" while the job still runs, and a suspended job's line starts "Angehalten".
+Each pause and each limits change also goes to the log file ("slipstream: pause until …"), so the
+log shows whether one reached the worker. With a worker before v0.2.18 the menu offers only
+"Sofort pausieren", which gives every job back after a minute, as it always did.
+
+**The efficiency cores** (encode-queue v0.2.18; Thorsten, 2026-10-28: "Run archive encodes only on
+efficiency cores"). On Apple silicon the CPU submenu offers "Nur Effizienzkerne" beside the core
+counts, and a switch "Archiv-Aufträge nur auf Effizienzkernen"; Settings → Leistung has both.
+Those jobs run in macOS's background QoS, which keeps them on the efficiency cores, so the
+performance cores stay free for the person at the Mac. It reaches a running job at once. Both
+say the slowdown: on the Mac Studio (M2 Max, 8 P and 4 E cores) an x265 slower encode took 10.6
+times as long there (28.2 s against 297.8 s, three runs each; encode-queue's README, "The
+efficiency cores"), "etwa 11× langsamer". `CPUChoice.efficiencySlowdown` estimates it for other
+Macs from their cores, as the worker does for the queue, whose ECT and lease holds count it.
+
 **Standard output:** one JSON object per line, unknown events and fields ignored:
 
 | event | fields | the menu shows |
@@ -64,13 +88,13 @@ tells the queue the new limit at once too, so its estimates plan with it. encode
 | `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s`; about once a second per running job | a line per job, "Wandelt um: one_144_Hey_Siri · 12 %", with its details as a submenu; the first job's share in the icon |
 | `idle` | | no job |
 | `result` | `lease_id`, `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | "Letzte Ereignisse", the last ten, newest first; the count today; it ends its lease's line |
-| `paused` | `until` or null | the pause the queue knows |
+| `paused` | `until` or null, `mode` (`now`, `after_job`; v0.2.18) | the pause the queue knows: "Pausiert bis 20:00" |
 | `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
 | `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
-| `limits` | `threads` (the limit in effect, the Mac's cores when unlimited), `cores`, `throttled` (how many running jobs are held to it); at the start, after each `limits` line and when a job is held or freed (encode-queue v0.2.17) | "CPU für den Encoder: 3 von 12 Kernen", with "(laufender Auftrag gedrosselt)" while `throttled` is above 0; the setting before the first event and with an older worker |
+| `limits` | `threads` (the limit in effect, the Mac's cores when unlimited), `cores`, `throttled` (how many running jobs are held to it), `efficiency` (v0.2.18); at the start, after each `limits` line and when a job is held or freed (encode-queue v0.2.17) | "CPU für den Encoder: 3 von 12 Kernen", with "(laufender Auftrag gedrosselt)" while `throttled` is above 0, or "nur Effizienzkerne"; the setting before the first event and with an older worker |
 
 **Several jobs at once.** With two or more slots the worker runs jobs side by side, each with
 its own `job` events, and sends `idle` only once none is left. A job that ends beside another
