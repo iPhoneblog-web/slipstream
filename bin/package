@@ -59,6 +59,14 @@ done
 for f in build/tools/versions.txt build/tools/versions.json; do
   [[ -f $f ]] && cp "$f" "$app/Contents/Resources/"
 done
+# Resources/release-notes: each version's notes, for "Neu in …" and "Über Slipstream"
+# (docs/release.md, "Release notes"). A release (REQUIRE_UPDATES=1) needs its own.
+mkdir -p "$app/Contents/Resources/release-notes"
+cp release-notes/[0-9]*.[0-9]*.[0-9]*.md "$app/Contents/Resources/release-notes/"
+if [[ -n ${REQUIRE_UPDATES:-} && ! -s "release-notes/$version.md" ]]; then
+  print "release-notes/$version.md is missing: a release needs its notes" >&2
+  exit 1
+fi
 # Resources/fonts: Inter and the fonts.conf that sees only it, for libass's captions; the worker
 # gets FONTCONFIG_FILE pointing there (docs/tools.md, "Captions").
 [[ -d build/tools/fonts ]] && ditto build/tools/fonts "$app/Contents/Resources/fonts"

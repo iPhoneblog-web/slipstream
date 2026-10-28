@@ -1,6 +1,8 @@
-// The Sparkle appcast of a release: one item for the archive, signed with Slipstream's EdDSA key
-// (docs/release.md, "Updates").
-//   swift tools/appcast.swift <archive> <short-version> <build> <archive-url> <public-key> <out.xml>
+// The Sparkle appcast of a release: one item for the archive, signed with Slipstream's EdDSA key,
+// with the version's release notes as its description, which Sparkle's update dialog shows
+// (docs/release.md, "Updates" and "Release notes").
+//   swift tools/appcast.swift <archive> <short-version> <build> <archive-url> <public-key> <notes.html> <out.xml>
+// <notes.html> is `release-notes <version> <dir>`'s release-notes.html.
 // The private key comes from the environment, SPARKLE_ED_PRIVATE_KEY: the base64 of the 32-byte
 // Ed25519 seed, as Sparkle's generate_keys exports it. It must belong to <public-key>, the app's
 // SUPublicEDKey; the signature is checked against that key before the file is written.
@@ -13,8 +15,12 @@ func fail(_ s: String) -> Never {
 }
 
 let a = CommandLine.arguments
-guard a.count == 7 else { fail("usage: appcast.swift <archive> <short-version> <build> <archive-url> <public-key> <out.xml>") }
-let (archive, short, build, url, publicKey, out) = (a[1], a[2], a[3], a[4], a[5], a[6])
+guard a.count == 8 else { fail("usage: appcast.swift <archive> <short-version> <build> <archive-url> <public-key> <notes.html> <out.xml>") }
+let (archive, short, build, url, publicKey, notesFile, out) = (a[1], a[2], a[3], a[4], a[5], a[6], a[7])
+guard let notes = FileManager.default.contents(atPath: notesFile).map({ String(decoding: $0, as: UTF8.self) }),
+      notes.contains("<li>"), !notes.contains("]]>") else {
+    fail("\(notesFile) holds no release notes: a release needs them (release-notes/README.md)")
+}
 
 guard let seedText = ProcessInfo.processInfo.environment["SPARKLE_ED_PRIVATE_KEY"],
       let seed = Data(base64Encoded: seedText.trimmingCharacters(in: .whitespacesAndNewlines)), seed.count == 32,
@@ -52,6 +58,8 @@ let feed = """
       <sparkle:shortVersionString>\(xml(short))</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>\(xml(release))</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[
+\(notes)      ]]></description>
       <enclosure url="\(xml(url))" length="\(data.count)" type="application/octet-stream"
         sparkle:edSignature="\(signature.base64EncodedString())"/>
     </item>

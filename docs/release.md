@@ -13,6 +13,28 @@ git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1
 
 Never upload a build from a Mac by hand.
 
+## Release notes
+
+Every release has `release-notes/<version>.md`: a few German bullets for the people who use
+Slipstream, what changed for them and what to do (release-notes/README.md has the format).
+Merge it with the release's last pull request, before the tag. Thorsten, 2026-10-28: "Are we
+using Sparkle properly? I'm not seeing "What's new" in some places"; up to 1.3.5 the appcast
+carried only a link to the GitHub release, whose text was the install steps.
+
+- **CI**: on a tag the test job runs `swift run release-notes <tag>` before anything is built, and
+  a tag without its notes, or notes without a bullet, fails there. The build job makes
+  `release-notes.html` and `release-notes.md` (the `release-notes` executable, `HelperCore.
+  ReleaseNotes`) before any secret is on the runner. `bin/package` refuses a release build
+  without the file too.
+- **Sparkle**: `tools/appcast.swift` puts the HTML into the item's `<description>`, so the update
+  dialog shows the notes; it refuses to write an appcast without them.
+- **GitHub**: the publishing job puts the Markdown above the install steps and checksums.
+- **The app** carries every version's notes in `Contents/Resources/release-notes`. After an
+  update the menu starts with "Neu in 1.3.6 …" until it is opened: a window with the notes of
+  every version since the last one seen (`notesSeenVersion` in the defaults). A Mac updated from
+  a version without it sees the current version's; a new Mac sees none. "Über Slipstream" shows
+  the current version's notes above the tool versions.
+
 ## Updates
 
 **Sparkle 2** (pinned in `project.yml`) updates installed copies. Once a day the app reads
