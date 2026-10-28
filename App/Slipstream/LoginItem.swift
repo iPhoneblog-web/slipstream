@@ -1,5 +1,4 @@
 import Foundation
-import os
 import ServiceManagement
 
 /// "Bei der Anmeldung starten": the app as a login item (`SMAppService.mainApp`). macOS shows it
@@ -11,8 +10,6 @@ import ServiceManagement
 /// thread and froze for seconds per click (docs/traps.md, "A frozen Settings window"); so it is
 /// async only and runs off the main thread.
 enum LoginItem {
-    private static let log = Logger(subsystem: "io.github.kyrios.slipstream", category: "login")
-
     static func isOn() async -> Bool {
         await Task.detached(priority: .userInitiated) { SMAppService.mainApp.status == .enabled }.value
     }
@@ -29,7 +26,7 @@ enum LoginItem {
                     try service.unregister()
                 }
             } catch {
-                log.error("login item: \(error.localizedDescription, privacy: .public)")
+                Log.error(.app, "login item \(on ? "on" : "off"): \(error.localizedDescription)")
             }
             return service.status == .enabled
         }.value

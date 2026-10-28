@@ -7,7 +7,8 @@ public enum WorkerEvent: Equatable, Sendable {
     case connection(up: Bool, lastAnswerAt: Date?, refused: [Refusal])
     case job(WorkerJob)
     case idle
-    case log(leaseId: String?, line: String)
+    /// A job's line; `level` a slog level word, from a worker that sends one (docs/logging.md).
+    case log(leaseId: String?, line: String, level: String?)
     /// A job this worker ended; `leaseId` names the running job it ends.
     case result(leaseId: String?, title: String, verdict: String, check: String?)
     /// The pause the worker keeps; `mode` from encode-queue v0.2.18, nil before.
@@ -128,7 +129,7 @@ public enum WorkerEvent: Equatable, Sendable {
         case "idle":
             return .idle
         case "log":
-            return .log(leaseId: object["lease_id"] as? String, line: object["line"] as? String ?? "")
+            return .log(leaseId: object["lease_id"] as? String, line: object["line"] as? String ?? "", level: object["level"] as? String)
         case "result":
             return .result(leaseId: object["lease_id"] as? String, title: object["title"] as? String ?? "",
                            verdict: object["verdict"] as? String ?? "", check: object["check"] as? String)

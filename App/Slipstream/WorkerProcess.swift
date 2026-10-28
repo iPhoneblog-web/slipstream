@@ -1,21 +1,5 @@
 import Foundation
 import HelperCore
-import os
-
-/// The worker's log file, `~/Library/Logs/Slipstream/worker.log` (rotated at 5 MB): its standard
-/// error and the app's lines about starting and stopping it. Up to 1.3.1 these lines lived only
-/// in the log window and in the unified log at info level, which macOS does not keep; a worker
-/// that died left no trace (docs/worker.md, "When the worker stops").
-enum WorkerLog {
-    static let url = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Logs/Slipstream/worker.log")
-    private static let queue = DispatchQueue(label: "io.github.kyrios.slipstream.worker-log", qos: .utility)
-    nonisolated(unsafe) private static let file = RotatingLog(url: url)
-
-    static func write(_ line: String) {
-        queue.async { file.write(line) }
-    }
-}
 
 /// The embedded worker, `Contents/Helpers/encode-worker` (docs/worker.md): started with the
 /// private key on its standard input, commands after it, events back on its standard output.
@@ -33,7 +17,6 @@ final class WorkerProcess: @unchecked Sendable {
     private let input = Pipe()
     private let output = Pipe()
     private let errors = Pipe()
-    private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "worker")
     private let lock = NSLock()
     private var lines = LineBuffer()
     private var errorLines = LineBuffer()
@@ -115,11 +98,12 @@ final class WorkerProcess: @unchecked Sendable {
             guard let self, !data.isEmpty else { return }
             let lines = self.lock.withLock { self.lines.append(data) }
             for line in lines {
+                Log.debug(.worker, "event: \(line)")
                 if let event = WorkerEvent.parse(line) { self.onEvent(event) }
             }
         }
-        // Standard error is the log for people: the log window, the unified log, and
-        // ~/Library/Logs/Slipstream/worker.log, which outlives the app (WorkerLog).
+        // Standard error is the log for people: the unified log and the log file, at the level
+        // the worker gave each line (WorkerLogLine; docs/logging.md).
         let stderrDone = DispatchSemaphore(value: 0)
         errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -135,9 +119,8 @@ final class WorkerProcess: @unchecked Sendable {
                 return new
             }
             for line in new {
-                self.log.info("\(line, privacy: .public)")
-                WorkerLog.write(line)
-                self.onEvent(.log(leaseId: nil, line: line))
+                let (level, text) = WorkerLogLine.stderr(line)
+                Log.write(level, .worker, text)
             }
         }
         process.terminationHandler = { [weak self] p in
@@ -159,6 +142,7 @@ final class WorkerProcess: @unchecked Sendable {
     }
 
     func send(_ command: WorkerCommand) {
+        Log.debug(.worker, "command: \(command.line.trimmingCharacters(in: .newlines))")
         write(command.line)
     }
 
@@ -169,7 +153,7 @@ final class WorkerProcess: @unchecked Sendable {
         do {
             try input.fileHandleForWriting.write(contentsOf: Data(text.utf8))
         } catch {
-            log.error("worker input: \(error.localizedDescription, privacy: .public)")
+            Log.error(.worker, "worker input: \(error.localizedDescription)")
         }
     }
 
