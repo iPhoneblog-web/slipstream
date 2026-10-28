@@ -334,10 +334,11 @@ final class AppModel: ObservableObject {
             finishedToday = defaults.integer(forKey: "todayCount")
         }
 
-        // Every encode runs in its own process at nice 19 (ProcessEncoder, WorkerProcess), so
-        // whatever the user does comes first, and the app itself keeps its normal priority for the
-        // loopback. Not the `background` QoS, which keeps work on the efficiency cores
-        // (docs/traps.md).
+        // Every encode runs in its own process: ProRes at nice 19 (ProcessEncoder), the queue's
+        // normal jobs at nice 19 under the utility QoS clamp, which the worker sets itself
+        // (WorkerProcess), so whatever the user does comes first; only a Sofort job runs at the
+        // worker's normal priority. The app itself keeps its normal priority for the loopback.
+        // Not the `background` QoS, which keeps work on the efficiency cores (docs/traps.md).
         let jobs = ProResJobs(root: Paths.jobs, encoder: ProcessEncoder.make(cli: Paths.helper("slipstream-cli")))
         self.jobs = jobs
         Task {

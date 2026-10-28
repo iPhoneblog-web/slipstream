@@ -103,8 +103,18 @@ question for that page's own host:
 - **`nice 19` on the whole app starved its loopback**: with another encode at `nice 19` on the
   Mac (load 70), 1 GiB in 64 MiB slices came in at 160 MB/s; the app at normal priority, its
   encodes in their own processes at `nice 19`, took 563 MB/s with load 137 (Mac Studio,
-  2026-10-26). So the app never renices itself; `ProcessEncoder` and the worker start through
+  2026-10-26). So the app never renices itself; `ProcessEncoder` starts through
   `/usr/bin/nice -n 19`.
+- **The worker starts at nice 0, user-initiated** (encode-queue v0.2.20): it puts each normal
+  job's tools at nice 19 under the utility QoS clamp (`taskpolicy -c utility nice -n 19`) itself,
+  and a Sofort job's at its own priority. Under `/usr/bin/nice -n 19`, as up to 1.3.6, a Sofort
+  tool ran at 19 too, since an unprivileged process cannot lower its nice again. Measured on the
+  Mac Studio (`ps -o nice,pri`): a tool of the worker started the old way ran at nice 19,
+  priority 31; started the new way, a Sofort tool runs at nice 0, priority 31, and a normal one at
+  nice 19, priority 20 (the utility clamp). `qualityOfService = .userInitiated` sets no clamp:
+  a process launched with it shows priority 31, as with the default, and 20 with `.utility`. The
+  core limit's duty cycle holds both kinds of tool (encode-queue's throttle test, normal and
+  Sofort, about 1 core under a limit of 1).
 
 ## Encoding
 

@@ -19,7 +19,8 @@ enum WorkerLog {
 
 /// The embedded worker, `Contents/Helpers/encode-worker` (docs/worker.md): started with the
 /// private key on its standard input, commands after it, events back on its standard output.
-/// It runs at `nice 19`, and so do the ffmpeg and whisper.cpp it starts.
+/// It sets its tools' priority itself (encode-queue v0.2.20): a normal job's at `nice 19` under the
+/// utility QoS clamp, a Sofort job's at the worker's own, which is why it starts at nice 0 here.
 final class WorkerProcess: @unchecked Sendable {
     struct Limits: Equatable {
         var threads: Int
@@ -73,9 +74,14 @@ final class WorkerProcess: @unchecked Sendable {
     func start(key: WireGuardKey, limits: Limits, version: String) throws {
         try FileManager.default.createDirectory(at: Paths.workerState, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: Paths.models, withIntermediateDirectories: true)
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/nice")
+        // Not under nice 19 (encode-queue v0.2.20, "realtime by the OS scheduler"): the worker puts
+        // each normal job's tools at nice 19 under the utility QoS clamp itself, and a Sofort job's
+        // at its own priority; an unprivileged process cannot lower its nice again, so a worker at
+        // 19 held Sofort jobs at 19 too. User-initiated, so nothing clamps it below the default
+        // (docs/traps.md, "Priority"). A worker before v0.2.20 renices itself to 19 as before.
+        process.executableURL = Paths.helper("encode-worker")
+        process.qualityOfService = .userInitiated
         var arguments: [String] = [
-            "-n", "19", Paths.helper("encode-worker").path,
             "--key-stdin", "--tunnel-file", Paths.tunnel.path, "--state-dir", Paths.workerState.path,
             // No --app-version: the helper API's app_version is the worker's own release, which
             // the queue compares with its min_app_version; the worker sends it by itself. The app
