@@ -51,6 +51,16 @@ extension CPUChoice {
     /// 297.8 s against 28.2 s, three runs each).
     public static let effPerfRatio = 0.21
 
+    /// What the efficiency cores mean beside other work: macOS gives a background job what the Mac
+    /// leaves over. On the Mac Studio, at load averages of 80 to 140, an x265 encode in the background
+    /// got 0.07 cores over a minute and no frame (encode-queue's README, "The efficiency cores").
+    public static let efficiencyNote = "Läuft fast nur, wenn der Mac nichts anderes tut"
+
+    /// Settings' line under the switches: the slowdown and what it means.
+    public static func efficiencyCaption(slowdown: Int?) -> String {
+        (slowdown.map { "Auf den Effizienzkernen etwa \($0)-mal langsamer. " } ?? "") + efficiencyNote + "."
+    }
+
     /// How many times slower a job runs on the efficiency cores only, (p + e·r) / (e·r), whole;
     /// nil on a Mac with one kind of core.
     public static func efficiencySlowdown(perf: Int, eff: Int) -> Int? {

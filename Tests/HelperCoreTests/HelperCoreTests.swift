@@ -167,6 +167,10 @@ final class CPUChoiceTests: XCTestCase {
         XCTAssertEqual(Efficiency(only: true, archive: true), .all)
         XCTAssertEqual(Efficiency(only: false, archive: true), .archive)
         XCTAssertEqual(Efficiency(only: false, archive: false), .off)
+        // What it means beside other work, measured: 0.07 cores at load 80 to 140.
+        XCTAssertEqual(CPUChoice.efficiencyCaption(slowdown: 11),
+                       "Auf den Effizienzkernen etwa 11-mal langsamer. Läuft fast nur, wenn der Mac nichts anderes tut.")
+        XCTAssertEqual(CPUChoice.efficiencyCaption(slowdown: nil), "Läuft fast nur, wenn der Mac nichts anderes tut.")
     }
 }
 

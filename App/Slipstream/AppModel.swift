@@ -367,9 +367,10 @@ final class AppModel: ObservableObject {
 
     /// A line about the worker's life: the unified log (kept), the log file and the log window.
     private func note(_ line: String) {
+        appendLog("slipstream: " + line)
+        guard !previewing else { return } // the log file is the running Slipstream's
         log.notice("\(line, privacy: .public)")
         WorkerLog.write("slipstream: " + line)
-        appendLog("slipstream: " + line)
     }
 
     /// The worker is gone or did not start: say why in the menu and start it again later,
@@ -499,8 +500,10 @@ final class AppModel: ObservableObject {
         let changed = until != pausedUntil || mode != pauseMode
         pausedUntil = until
         pauseMode = until == nil ? .now : mode
-        defaults.set(until, forKey: "pausedUntil")
-        defaults.set(pauseMode.rawValue, forKey: "pauseMode")
+        if !previewing { // the defaults are the running Slipstream's
+            defaults.set(until, forKey: "pausedUntil")
+            defaults.set(pauseMode.rawValue, forKey: "pauseMode")
+        }
         guard tellWorker else { return }
         // In the log file too (Thorsten, 2026-10-28: "Pause also wasn't working", and nothing
         // said whether the menu's pause reached the worker).
@@ -574,6 +577,7 @@ final class AppModel: ObservableObject {
     func preview() {
         // "Beenden" ends it at once: shutDown would remove the running Slipstream's loopback file.
         quitting = true
+        previewing = true
         let now = Date()
         site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
         threadsSetting = 3
@@ -597,8 +601,24 @@ final class AppModel: ObservableObject {
             ResultLine(title: "ProRes: Interview_A.mov", verdict: "fertig", check: nil, at: now.addingTimeInterval(-4000)),
         ]
         finishedToday = 7
+        // The first job's event once a second, as a running encode sends it, so the menu sees
+        // what it sees beside a real job: a pause clicked while the model changes.
+        var fraction = 0.12
+        guard UserDefaults.standard.object(forKey: "menuPreviewTicker") == nil || UserDefaults.standard.bool(forKey: "menuPreviewTicker") else { return }
+        timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            fraction = min(1, fraction + 0.001)
+            let line = #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fps":9.4,"speed":0.38,"eta_s":1260,"fraction":"#
+                + String(fraction) + "}"
+            Task { @MainActor in
+                if let event = WorkerEvent.parse(line) { self?.handle(event) }
+            }
+        })
     }
     #endif
+
+    /// The Debug menu preview (-menuPreview): nothing it does reaches the defaults or the log file,
+    /// which are the running Slipstream's.
+    private var previewing = false
 
     // MARK: - Quit
 

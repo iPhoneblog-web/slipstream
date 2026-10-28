@@ -58,8 +58,10 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   die Drossel sofort auf. Die Zahl gilt auch nach einem Neustart. **Nur Effizienzkerne** lässt
   alle Aufträge nur auf den Effizienzkernen laufen, **Archiv-Aufträge nur auf Effizienzkernen**
   nur die Archiv-Aufträge: die Leistungskerne bleiben frei für die Arbeit am Mac, auch für einen
-  laufenden Auftrag sofort. Das ist etwa 11-mal langsamer (gemessen am Mac Studio); das Menü
-  sagt es dazu.
+  laufenden Auftrag sofort. Das ist etwa 11-mal langsamer (gemessen am Mac Studio), und ein
+  solcher Auftrag läuft fast nur, wenn der Mac nichts anderes tut: macOS gibt ihm, was übrig
+  bleibt. Bei viel Arbeit am Mac bekam er in einer Minute kaum etwas (0,07 Kerne). Menü und
+  Einstellungen sagen beides dazu.
 - **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
   `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
 - **Verbindung: Encoder gestoppt** heißt: der Encoder-Teil von Slipstream läuft gerade nicht.

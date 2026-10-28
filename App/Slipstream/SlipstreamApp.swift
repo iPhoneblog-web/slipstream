@@ -219,6 +219,7 @@ struct MenuContent: View {
                     Toggle("Archiv-Aufträge nur auf Effizienzkernen",
                            isOn: Binding(get: { archiveOnEfficiency || efficiencyOnly }, set: { archiveOnEfficiency = $0; model.limitsChanged() }))
                         .disabled(efficiencyOnly)
+                    Text(CPUChoice.efficiencyNote)
                 }
             }
             Button("Protokoll anzeigen …") { model.showLog() }
@@ -331,6 +332,9 @@ struct SettingsView: View {
                     Toggle("Nur Effizienzkerne" + slower, isOn: $efficiencyOnly)
                     Toggle("Archiv-Aufträge nur auf Effizienzkernen" + slower, isOn: $archiveOnEfficiency)
                         .disabled(efficiencyOnly)
+                    Text(CPUChoice.efficiencyCaption(slowdown: AppModel.efficiencySlowdown))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Toggle("Whisper darf die GPU nutzen", isOn: $gpu)
                 Picker("Aufträge gleichzeitig", selection: $jobs) {

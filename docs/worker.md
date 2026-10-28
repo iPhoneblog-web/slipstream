@@ -77,8 +77,11 @@ Those jobs run in macOS's background QoS, which keeps them on the efficiency cor
 performance cores stay free for the person at the Mac. It reaches a running job at once. Both
 say the slowdown: on the Mac Studio (M2 Max, 8 P and 4 E cores) an x265 slower encode took 10.6
 times as long there (28.2 s against 297.8 s, three runs each; encode-queue's README, "The
-efficiency cores"), "etwa 11× langsamer". `CPUChoice.efficiencySlowdown` estimates it for other
-Macs from their cores, as the worker does for the queue, whose ECT and lease holds count it.
+efficiency cores"), "etwa 11× langsamer". That is the idle Mac's figure: macOS gives a background
+job only what the Mac leaves over, and at load averages of 80 to 140 such an encode got 0.07
+cores over a minute and no frame. So both say "Läuft fast nur, wenn der Mac nichts anderes tut"
+(`CPUChoice.efficiencyNote`). `CPUChoice.efficiencySlowdown` estimates the factor for other Macs
+from their cores, as the worker does for the queue, whose ECT and lease holds count it.
 
 **Standard output:** one JSON object per line, unknown events and fields ignored:
 
