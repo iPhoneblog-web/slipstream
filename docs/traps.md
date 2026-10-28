@@ -92,6 +92,15 @@ question for that page's own host:
   100 ms with the app's log around them (a CI runner may need over 100 ms for a tab's first
   layout). Nothing in a view's body or its `@State`
   initial values may call a daemon, the keychain or the disk.
+- **A static that runs the run loop** (1.3.6): the app crashed at every launch after the update
+  ("BUG IN CLIENT OF LIBDISPATCH: trying to lock recursively"). `AppModel.workerHasModes`, a
+  `static let`, asked the worker for its `-h` usage and waited in `Process.waitUntilExit`, which
+  runs the run loop; SwiftUI built the menu in that turn, and the CPU picker read
+  `workerHasModes` again while it was still being initialised. It hit when the worker answered
+  late, as it does while macOS checks a freshly updated app's helpers. `WorkerFlags.usage` now
+  waits on a semaphore and never runs the run loop (`WorkerUsageTests`), and `bin/check-launch`
+  starts a copy whose worker answers 3 s late. No `static let` or lazy global that the menu reads
+  may run the run loop: no `waitUntilExit`, no `RunLoop.run`, no modal panel.
 - **One long settings form did not fit a 13-inch screen** and could not be resized (1.1.0).
   Settings has four tabs, each as tall as its content, in a resizable window with a minimum
   size.
