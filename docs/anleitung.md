@@ -62,7 +62,8 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   Einstellungen. Die Zeile zeigt, was gerade gilt, etwa „3 von 12 Kernen“. Neue Aufträge starten
   mit der neuen Zahl. Ein laufender Auftrag, der mit mehr Kernen begann, läuft gedrosselt weiter:
   er hält in jeder Zehntelsekunde so lange an, dass er im Mittel nur noch so viele Kerne braucht,
-  und verliert dabei nichts. Dann steht dort „(laufender Auftrag gedrosselt)“. Mehr Kerne heben
+  und verliert dabei nichts. Dann steht dort „3 von 12, gedrosselt“, und im Untermenü „Laufender
+  Auftrag gedrosselt“. Mehr Kerne heben
   die Drossel sofort auf. Die Zahl gilt auch nach einem Neustart. **Nur Effizienzkerne** lässt
   alle Aufträge nur auf den Effizienzkernen laufen, **Archiv-Aufträge nur auf Effizienzkernen**
   nur die Archiv-Aufträge: die Leistungskerne bleiben frei für die Arbeit am Mac, auch für einen
@@ -79,10 +80,12 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 - **Verbindung: verbunden** oder getrennt. Das Untermenü zeigt den Tunnel mit der letzten Antwort
   des Funkhauses, die Safari-Extension und Auftragsarten, die das Funkhaus diesem Mac nicht gibt.
   „Nicht gekoppelt (nur ProRes)“ ist normal auf einem Mac, der nur ProRes umwandelt.
-- **Safari-Extension** (im Untermenü „Verbindung“): „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
-  Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
-  Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
-  einem Update von Slipstream fragt Safari das neu).
+- **Safari-Extension:** „verbunden, zuletzt 20:01“ steht im Untermenü „Verbindung“, sobald das
+  Funkhaus in Safari Slipstream erreicht hat. Bis dahin steht im Menü **Safari-Extension: noch
+  nicht verbunden**, ein Untermenü mit den Schritten: „Funkhaus in Safari öffnen“; erscheint dann
+  nichts, in Safari → Einstellungen → Erweiterungen „Slipstream“ anhaken und das Funkhaus
+  erlauben. „Safari-Erweiterungen öffnen …“ öffnet diese Einstellungen gleich bei Slipstream.
+  Nach einem Update von Slipstream fragt Safari das neu.
 - **Einstellungen …:** ein Fenster mit fünf Tabs, in der Größe veränderbar: **Allgemein**
   (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, nur Effizienzkerne, Archiv-Aufträge nur auf Effizienzkernen, ob Whisper die GPU
   nutzen darf, Aufträge gleichzeitig, die Plätze dazu für Sofort und Stufe 1, und die
@@ -91,7 +94,8 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   sie belegen), **Funkhaus** (welches, und ein anderes einrichten), **Menüleiste** (was neben
   dem Symbol steht),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
-- **Lange Zeilen** kürzt das Menü mit „…“, damit es nicht breiter als etwa 420 Punkt wird; ein Pfad
+- **Lange Zeilen** kürzt das Menü mit „…“, damit es nicht breiter als etwa 330 Punkt wird, so
+  breit wie die Zeile „CPU für den Encoder: 12 von 12 Kernen“; ein Pfad
   verliert seine Mitte, eine Auftragszeile nur den Titel, die Prozent bleiben. Den ganzen Text
   zeigt der Tooltip, und „Protokoll anzeigen …“ hat ihn auch.
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.

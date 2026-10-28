@@ -1,13 +1,16 @@
 import Foundation
 
 /// A line of the menu bar's menu at most `width` wide (Slipstream 1.3.3: one long error line, a
-/// job's captions path, made the menu as wide as the screen). The cut keeps the start and puts
+/// job's captions path, made the menu as wide as the screen; Thorsten, 2026-10-28 20:08: "The
+/// Slipstream window is still far too wide"). The cut keeps the start and puts
 /// "…" at the end, or, for a line that names a path, keeps both ends and puts "…" in the middle:
 /// the middle of a path says least, and the start (what failed) gets three fifths. The menu shows
 /// the whole line as the item's tooltip.
 public enum MenuLine {
-    /// The menu's text width: about 420 pt of menu less its item padding.
-    public static let width = 380.0
+    /// The menu's text width: a little more than "CPU für den Encoder: 12 von 12 Kernen" (238 pt
+    /// in the menu font), so the menu is about 300 pt wide. Every line, label and button title
+    /// the app makes goes through `fit`; the fixed ones are measured in HelperCoreTests.
+    public static let width = 270.0
 
     /// `text` as it fits `width`, measured by `measure`; `text` itself when it fits.
     public static func fit(_ text: String, width: Double = width, measure: (String) -> Double) -> String {

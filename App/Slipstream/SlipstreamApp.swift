@@ -70,6 +70,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSApp.terminate(nil)
                 }
             }
+            // `-menuRender <file.png>`: the open menu as the app draws it, for a pull request
+            // (this Mac's shell may not record the screen); `-menuRenderSubmenu <title>` opens
+            // that submenu instead.
+            if let path = UserDefaults.standard.string(forKey: "menuRender") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    renderMenu(to: URL(fileURLWithPath: path), submenu: UserDefaults.standard.string(forKey: "menuRenderSubmenu"))
+                    NSApp.terminate(nil)
+                }
+            }
             return
         }
         #endif
@@ -131,6 +140,77 @@ extension AppDelegate {
             try? png.write(to: url)
         }
     }
+
+    /// Opens the status item's menu (or one of its submenus, alone), draws the menu's window into
+    /// `url` while it is open, and closes it.
+    func renderMenu(to url: URL, submenu: String?) {
+        func button(in view: NSView?) -> NSButton? {
+            guard let view else { return nil }
+            if let b = view as? NSButton { return b }
+            return view.subviews.lazy.compactMap { button(in: $0) }.first
+        }
+        guard let item = NSApp.windows.first(where: { String(describing: type(of: $0)).contains("StatusBar") }),
+              let statusButton = button(in: item.contentView) else { return }
+        var token: NSObjectProtocol?
+        token = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
+            if let token { NotificationCenter.default.removeObserver(token) }
+            guard let menu = note.object as? NSMenu else { return }
+            let draw = Timer(timeInterval: 0.8, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    let width = NSApp.windows.filter { $0.isVisible && $0.level.rawValue >= NSWindow.Level.popUpMenu.rawValue }
+                        .map(\.frame.width).max() ?? 0
+                    var shown = menu
+                    if let title = submenu, let sub = menu.items.first(where: { $0.title == title })?.submenu {
+                        sub.update()
+                        shown = sub
+                    }
+                    Self.drawMenu(shown, width: width, to: url)
+                    menu.cancelTracking()
+                }
+            }
+            RunLoop.main.add(draw, forMode: .common)
+        }
+        statusButton.performClick(nil)
+    }
+
+    /// The menu's items as AppKit holds them, drawn in the menu font at the open menu's width:
+    /// their titles exactly as the app made them, disabled ones grey, a submenu with its arrow.
+    /// The window itself draws nothing into a bitmap.
+    static func drawMenu(_ menu: NSMenu, width: CGFloat, to url: URL) {
+        let font = NSFont.menuFont(ofSize: 0)
+        let rowH: CGFloat = 22, sepH: CGFloat = 11, pad: CGFloat = 14
+        let w = width > 0 ? width : 320
+        let items = menu.items.filter { !$0.isHidden }
+        let h = items.reduce(CGFloat(10)) { $0 + ($1.isSeparatorItem ? sepH : rowH) } + 10
+        let image = NSImage(size: NSSize(width: w, height: h), flipped: true) { rect in
+            NSColor(white: 0.96, alpha: 1).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10).fill()
+            var y: CGFloat = 10
+            for item in items {
+                if item.isSeparatorItem {
+                    NSColor(white: 0.82, alpha: 1).setFill()
+                    NSRect(x: pad, y: y + sepH / 2, width: w - 2 * pad, height: 1).fill()
+                    y += sepH
+                    continue
+                }
+                let color: NSColor = item.isEnabled || item.submenu != nil ? .black : NSColor(white: 0.55, alpha: 1)
+                let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+                let mark = item.state == .on ? "✓" : ""
+                (mark as NSString).draw(at: NSPoint(x: 6, y: y + 3), withAttributes: attrs)
+                (item.title as NSString).draw(at: NSPoint(x: pad + 8, y: y + 3), withAttributes: attrs)
+                if item.submenu != nil {
+                    ("›" as NSString).draw(at: NSPoint(x: w - pad - 6, y: y + 2), withAttributes: attrs)
+                }
+                y += rowH
+            }
+            return true
+        }
+        if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
+            rep.size = image.size
+            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        }
+        print("menu \(Int(w)) pt wide, \(items.count) items: " + items.map { $0.isSeparatorItem ? "—" : $0.title }.joined(separator: " | "))
+    }
 }
 #endif
 
@@ -155,6 +235,10 @@ struct MenuIcon: View {
         }
     }
 }
+
+/// A label the app makes (a submenu's title, a button with a time or a version in it), cut to
+/// the menu's width as Line is.
+func fitted(_ text: String) -> String { MenuLine.fit(text, measure: MenuMirror.measure) }
 
 /// A line of the menu, cut to the menu's width (MenuLine); the whole text is its tooltip and, once
 /// cut, in the log window.
@@ -216,7 +300,7 @@ struct MenuContent: View {
 
             Divider()
             if let until = l.pausedUntil {
-                Button("Fortsetzen (Pause bis \(until))") { model.resume() }
+                Button(fitted("Fortsetzen (Pause bis \(until))")) { model.resume() }
                 if l.pauseAfterJob && l.queueJobRunning {
                     Button("Laufenden Auftrag sofort anhalten") { model.pauseNow() }
                 }
@@ -232,7 +316,11 @@ struct MenuContent: View {
                     }
                 }
             }
-            Menu(l.cpu) {
+            Menu(fitted(l.cpu)) {
+                if l.throttled {
+                    Line("Laufender Auftrag gedrosselt")
+                    Divider()
+                }
                 // The core counts and, on Apple silicon, "Nur Effizienzkerne" (encode-queue v0.2.18).
                 Picker("CPU", selection: Binding(get: { efficiencyOnly ? CPUChoice.efficiencyTag : threads }, set: { v in
                     if v == CPUChoice.efficiencyTag {
@@ -245,7 +333,7 @@ struct MenuContent: View {
                 })) {
                     ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads, efficiencyCores: AppModel.efficiencyCores,
                                               slowdown: AppModel.efficiencySlowdown)) { c in
-                        Text(c.label).tag(c.threads)
+                        Text(fitted(c.label)).tag(c.threads)
                     }
                 }
                 .pickerStyle(.inline)
@@ -255,7 +343,7 @@ struct MenuContent: View {
                     Toggle("Archiv-Aufträge nur auf Effizienzkernen",
                            isOn: Binding(get: { archiveOnEfficiency || efficiencyOnly }, set: { archiveOnEfficiency = $0; model.limitsChanged() }))
                         .disabled(efficiencyOnly)
-                    Text(CPUChoice.efficiencyNote)
+                    ForEach(CPUChoice.efficiencyNoteLines, id: \.self) { Line($0) }
                 }
             }
             Menu("In der Menüleiste zeigen") {
@@ -266,10 +354,23 @@ struct MenuContent: View {
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
-            Menu(l.connectionWord) {
+            // Not reached by Safari yet: what to do, in lines as wide as the menu (Thorsten,
+            // 2026-10-28 20:08: one long line here made the menu 800 pt wide).
+            if l.extensionMissing {
+                Menu("Safari-Extension: noch nicht verbunden") {
+                    Button("Funkhaus in Safari öffnen") { model.openSiteInSafari() }
+                    Divider()
+                    Line("Erscheint dann nichts:")
+                    Line("Safari → Einstellungen → Erweiterungen")
+                    Line("„Slipstream“ anhaken und für")
+                    Line("\(l.siteHost) erlauben")
+                    Button("Safari-Erweiterungen öffnen …") { model.showSafariExtensionSettings() }
+                }
+            }
+            Menu(fitted(l.connectionWord)) {
                 Line(l.connection)
                 if let reason = l.stopReason { Line(reason) }
-                ForEach(l.extensionLines, id: \.self) { Line($0) }
+                if let seen = l.extensionSeen { Line(seen) }
                 ForEach(l.refused, id: \.self) { Line($0) }
             }
 
@@ -280,7 +381,7 @@ struct MenuContent: View {
             Button("Lizenzen …") { About.showLicences() }
             Button("Nach Updates suchen …") { model.updates.check() }
             if let latest = l.update {
-                Button("Update verfügbar: \(latest) …") { model.updates.check() }
+                Button(fitted("Update verfügbar: \(latest) …")) { model.updates.check() }
             }
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
