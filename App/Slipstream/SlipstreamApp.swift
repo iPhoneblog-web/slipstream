@@ -62,6 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "menuPreview") {
             model.preview()
+            // `-menuBarRender <file.png>`: the menu bar's icon and text as the preview shows them, in
+            // light and dark, for a pull request; then quit.
+            if let path = UserDefaults.standard.string(forKey: "menuBarRender") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    renderMenuBar(to: URL(fileURLWithPath: path))
+                    NSApp.terminate(nil)
+                }
+            }
             return
         }
         #endif
@@ -104,23 +112,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The state in the icon itself: idle, encoding with its share, paused, no connection.
+#if DEBUG
+extension AppDelegate {
+    /// The menu bar's item, light above dark, at twice the size, as ImageRenderer draws MenuIcon.
+    func renderMenuBar(to url: URL) {
+        let strip = { (scheme: ColorScheme) in
+            MenuIcon(mirror: self.mirror)
+                .font(.system(size: NSFont.systemFontSize))
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(scheme == .dark ? Color(white: 0.16) : Color(white: 0.93))
+                .environment(\.colorScheme, scheme)
+                .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+        }
+        let r = ImageRenderer(content: VStack(alignment: .leading, spacing: 0) { strip(.light); strip(.dark) })
+        r.scale = 2
+        if let image = r.nsImage, let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: url)
+        }
+    }
+}
+#endif
+
+/// The state in the icon itself (idle or encoding, paused, no connection), and beside it what the
+/// user chose to see there (MenuBarTitle; Einstellungen → Menüleiste).
 struct MenuIcon: View {
     @ObservedObject var mirror: MenuMirror
 
     var body: some View {
-        switch mirror.icon {
-        case .paused:
-            Image(systemName: "pause.circle")
-        case .progress(let percent):
-            HStack(spacing: 2) {
+        HStack(spacing: 2) {
+            switch mirror.icon {
+            case .paused:
+                Image(systemName: "pause.circle")
+            case .down:
+                Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
+            case .idle, .busy:
                 Image(systemName: "wind")
-                Text("\(percent) %").monospacedDigit()
             }
-        case .down:
-            Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
-        case .idle:
-            Image(systemName: "wind")
+            if !mirror.title.isEmpty {
+                Text(mirror.title).monospacedDigit()
+            }
         }
     }
 }
@@ -220,6 +251,11 @@ struct MenuContent: View {
                            isOn: Binding(get: { archiveOnEfficiency || efficiencyOnly }, set: { archiveOnEfficiency = $0; model.limitsChanged() }))
                         .disabled(efficiencyOnly)
                     Text(CPUChoice.efficiencyNote)
+                }
+            }
+            Menu("In der Menüleiste zeigen") {
+                ForEach(MenuBarItem.allCases) { item in
+                    Toggle(item.label, isOn: Binding(get: { l.menuBarItems.items.contains(item) }, set: { model.setMenuBarItem(item, $0) }))
                 }
             }
             Button("Protokoll anzeigen …") { model.showLog() }
@@ -361,6 +397,22 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("Funkhaus", systemImage: "antenna.radiowaves.left.and.right") }
             .tag("site")
+
+            Form {
+                Section {
+                    ForEach(MenuBarItem.allCases) { item in
+                        Toggle(item.label, isOn: Binding(get: { model.menuBarItems.items.contains(item) }, set: { model.setMenuBarItem(item, $0) }))
+                    }
+                } header: {
+                    Text("Neben dem Symbol in der Menüleiste")
+                } footer: {
+                    Text("Nichts ausgewählt: nur das Symbol. Was gerade keinen Wert hat, etwa der Fortschritt ohne Auftrag, fehlt.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Menüleiste", systemImage: "menubar.rectangle") }
+            .tag("menubar")
 
             Form {
                 if let identity {
