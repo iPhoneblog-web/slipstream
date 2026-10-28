@@ -22,6 +22,13 @@ public enum MenuLine {
         return cut(chars, lo, middle: middle)
     }
 
+    /// `text`, which ends in `tail`, cut before the tail so the tail stays whole: a job's share,
+    /// " · 12 %", when its title is long.
+    public static func fit(_ text: String, keeping tail: String, width: Double = width, measure: (String) -> Double) -> String {
+        guard measure(text) > width, text.hasSuffix(tail) else { return fit(text, width: width, measure: measure) }
+        return fit(String(text.dropLast(tail.count)), width: width - measure(tail), measure: measure) + tail
+    }
+
     private static func cut(_ c: [Character], _ n: Int, middle: Bool) -> String {
         if !middle {
             return String(c.prefix(n)).trimmingCharacters(in: .whitespaces) + "…"

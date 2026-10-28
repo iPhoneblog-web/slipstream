@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.14`, toolchain 3; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.15`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
@@ -51,15 +51,21 @@ queue hands such a job out only while the Mac's free memory holds it.
 
 | event | fields | the menu shows |
 |---|---|---|
-| `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]`; when the tunnel goes up or down, and from v0.2.14 also when the last answer's minute changes | tunnel up or down, the last answer, a job kind refused for a tool version |
-| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s` | the current job, its share in the icon |
+| `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]`; when the tunnel goes up or down, and from v0.2.14 also when the last answer's minute changes | "Verbindung: verbunden" or "getrennt"; its submenu: the tunnel and the last answer, a job kind refused for a tool version |
+| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s`; about once a second per running job | a line per job, "Wandelt um: one_144_Hey_Siri · 12 %", with its details as a submenu; the first job's share in the icon |
 | `idle` | | no job |
-| `result` | `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | the last three results, the count today |
+| `result` | `lease_id`, `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | "Letzte Ereignisse", the last ten, newest first; the count today; it ends its lease's line |
 | `paused` | `until` or null | the pause the queue knows |
 | `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
+| `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
+
+**Several jobs at once.** With two or more slots the worker runs jobs side by side, each with
+its own `job` events, and sends `idle` only once none is left. A job that ends beside another
+sends no event of its own unless its result comes at once (one still being checked waits for
+its verdict), so the menu drops a job it has not heard of for 15 s (`HelperCore.RunningJobs`).
 
 Its standard error goes to the log window, to the unified log (info level, which macOS does not
 keep) and to `~/Library/Logs/Slipstream/worker.log`.

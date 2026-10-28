@@ -76,6 +76,10 @@ says why; where a number cost a measurement, the message keeps the measurement.
 
   Quit the app by PID when done. Never beside a running Slipstream: both would write the one app
   group file the extension reads.
+- **Beside a running Slipstream, look at the menu** in a Debug build started with
+  `-menuPreview YES`: two sample jobs, results and points; it starts nothing and leaves the app
+  group file alone. Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
+  app's extension.
 
 Say in the pull request which tests cover the change and what is still untested; the menu and
 Safari's extension settings need a person looking at the screen.

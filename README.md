@@ -51,8 +51,8 @@ release, signed and notarised, for Macs with Apple Silicon and macOS 14 or later
    every https page because the site is your choice, not the manifest's, but it answers only the
    site set up in step 2. Safari still asks per site: on the Funkhaus's first visit choose
    **Always allow on this website**.
-5. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu now says
-   "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
+5. **Check it.** Open the Funkhaus in Safari (reload it if it was open). The menu's
+   "Verbindung" submenu now says "Safari-Extension: verbunden". To pair the Mac for queue jobs, use the Funkhaus's Encoder page,
    "Diesen Mac als Helper hinzufügen".
 
 Updates install themselves: Slipstream checks once a day (Sparkle) and asks before it installs a

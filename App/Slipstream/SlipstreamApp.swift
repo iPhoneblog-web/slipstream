@@ -59,6 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A write to a worker that just died must fail with EPIPE, not end the app.
         signal(SIGPIPE, SIG_IGN)
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "menuPreview") {
+            model.preview()
+            return
+        }
+        #endif
         watchdog.start()
         model.start()
         // bin/check-launch: `-openSettings YES` opens Settings the way the menu does, and the
@@ -145,16 +151,24 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            Line(l.state)
+            // One short line per thing; the details in submenus (Thorsten, 2026-10-28).
+            if l.jobs.isEmpty || l.pausedUntil != nil { Line(l.state) }
             if let problem = l.problem { Line(problem) }
-            if !l.job.isEmpty {
-                Divider()
-                ForEach(l.job, id: \.self) { Line($0) }
+            ForEach(l.jobs) { job in
+                Menu {
+                    ForEach(job.details, id: \.self) { Line($0) }
+                } label: {
+                    Text(MenuLine.fit(job.title, keeping: job.share, measure: MenuMirror.measure))
+                }
+                .help(job.title)
             }
 
             Divider()
-            ForEach(l.results, id: \.self) { Line($0) }
+            Menu("Letzte Ereignisse") {
+                ForEach(l.results, id: \.self) { Line($0) }
+            }
             Line(l.today)
+            if let points = l.points { Line(points) }
 
             Divider()
             if let until = l.pausedUntil {
@@ -178,9 +192,12 @@ struct MenuContent: View {
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
-            Line(l.connection)
-            ForEach(l.extensionLines, id: \.self) { Line($0) }
-            ForEach(l.refused, id: \.self) { Line($0) }
+            Menu(l.connectionWord) {
+                Line(l.connection)
+                if let reason = l.stopReason { Line(reason) }
+                ForEach(l.extensionLines, id: \.self) { Line($0) }
+                ForEach(l.refused, id: \.self) { Line($0) }
+            }
 
             Divider()
             Button("Funkhaus öffnen") { model.openSite() }

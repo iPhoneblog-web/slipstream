@@ -32,21 +32,30 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 
 - **Das Symbol** zeigt den Zustand: Wind (bereit), Wind mit Prozent (wandelt um), Pause-Kreis
   (pausiert).
-- **Was gerade läuft:** Titel, Stufe oder „Whisper“, Prozent, Bilder pro Sekunde, Tempo,
-  Restzeit. Eine ProRes-Umwandlung steht hier auch.
-- **Die letzten Ergebnisse** und wie viele heute fertig wurden.
+- **Was gerade läuft:** eine Zeile je Auftrag, etwa „Wandelt um: one_144_Hey_Siri · 12 %“. Ihr
+  Untermenü nennt Datei, Stufe oder „Untertitel (Whisper)“, Bilder pro Sekunde, Tempo, Restzeit
+  und den Platz („Normal“ oder „Sofort und Stufe 1“). Eine ProRes-Umwandlung steht hier auch.
+  Läuft nichts, steht hier „Bereit“.
+- **Letzte Ereignisse:** ein Untermenü mit den letzten zehn Ergebnissen, das neueste oben.
+  Darunter, wie viele heute fertig wurden.
+- **Punkte**, zum Beispiel „1.240 Punkte heute · Platz 1 von 3“: was die heute angenommenen
+  Aufträge dieses Macs wert sind, und sein Platz unter allen gekoppelten Encodern. Ein Punkt ist
+  eine Minute Arbeit des Mac Studio; derselbe Auftrag bringt auf jedem Rechner gleich viele
+  Punkte. Das Funkhaus rechnet sie aus; sie entscheiden nicht, wer welchen Auftrag bekommt.
 - **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
   nur für Aufträge des Encoders, nie für ProRes.
 - **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
   auch nach einem Neustart. Die genaue Zahl steht in den Einstellungen.
 - **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
   `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
-- **Encoder gestoppt: …** sagt, warum der Encoder-Teil von Slipstream gerade nicht läuft, und
-  wann Slipstream ihn wieder startet (erst nach 10 Sekunden, bei wiederholtem Stopp seltener,
-  höchstens alle 10 Minuten). ProRes für das Funkhaus geht trotzdem.
-- **Verbindung:** Tunnel verbunden oder getrennt. „Nicht gekoppelt (nur ProRes)“ ist normal auf
-  einem Mac, der nur ProRes umwandelt.
-- **Safari-Extension:** „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
+- **Verbindung: Encoder gestoppt** heißt: der Encoder-Teil von Slipstream läuft gerade nicht.
+  Das Untermenü sagt, wann Slipstream ihn wieder startet (erst nach 10 Sekunden, bei
+  wiederholtem Stopp seltener, höchstens alle 10 Minuten), und darunter, warum. ProRes für das
+  Funkhaus geht trotzdem.
+- **Verbindung: verbunden** oder getrennt. Das Untermenü zeigt den Tunnel mit der letzten Antwort
+  des Funkhauses, die Safari-Extension und Auftragsarten, die das Funkhaus diesem Mac nicht gibt.
+  „Nicht gekoppelt (nur ProRes)“ ist normal auf einem Mac, der nur ProRes umwandelt.
+- **Safari-Extension** (im Untermenü „Verbindung“): „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
   Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
   Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
   einem Update von Slipstream fragt Safari das neu).
@@ -58,7 +67,8 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Lange Zeilen** kürzt das Menü mit „…“, damit es nicht breiter als etwa 420 Punkt wird; ein Pfad
-  verliert seine Mitte. Den ganzen Text zeigt der Tooltip, und „Protokoll anzeigen …“ hat ihn auch.
+  verliert seine Mitte, eine Auftragszeile nur den Titel, die Prozent bleiben. Den ganzen Text
+  zeigt der Tooltip, und „Protokoll anzeigen …“ hat ihn auch.
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
 - **Bei der Anmeldung starten** (beim ersten Start fragt Slipstream einmal, „Ja“ ist
   vorgewählt; in den Einstellungen umschaltbar): Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →
@@ -80,8 +90,8 @@ ein, solange Slipstream einen Auftrag hat.
   Ein Klick darauf startet sie im Hintergrund.
 - **Die Seite sagt, ProRes werde hier nicht unterstützt:** Slipstream ist nicht installiert, die
   Extension ist aus, oder sie darf beim Funkhaus nicht laufen (Safari →
-  Einstellungen → Erweiterungen → Slipstream; das Menü zeigt dann „Safari-Extension: noch nicht
-  verbunden“). Danach die Seite neu laden.
+  Einstellungen → Erweiterungen → Slipstream; das Menü zeigt dann unter „Verbindung“
+  „Safari-Extension: noch nicht verbunden“). Danach die Seite neu laden.
 - **„Das ist keine Videodatei.“** oder **„Dieses Videoformat (…) kann der Mac nicht lesen.“**:
   Neu aus Final Cut exportieren.
 - **„Auf dem Mac ist kein Platz mehr frei.“**: Platz schaffen; 10 Minuten 4K brauchen etwa

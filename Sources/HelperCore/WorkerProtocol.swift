@@ -8,12 +8,49 @@ public enum WorkerEvent: Equatable, Sendable {
     case job(WorkerJob)
     case idle
     case log(leaseId: String?, line: String)
-    case result(title: String, verdict: String, check: String?)
+    /// A job this worker ended; `leaseId` names the running job it ends.
+    case result(leaseId: String?, title: String, verdict: String, check: String?)
     case paused(until: Date?)
     case update(latest: String)
     case tools([Tool])
     /// One whisper model the queue wants this Mac to hold, at each change of its state (v0.2.7).
     case model(Model)
+    /// This Mac's points and its place today, when either changes (v0.2.15).
+    case points(Points)
+
+    /// What the queue says this Mac's accepted jobs earned by its points table (encode-queue
+    /// v0.2.15, "Punkte-Tabelle v1": one point is a minute of the Mac Studio's work), and its
+    /// place today among every paired worker. The queue computes them; the app only shows them.
+    public struct Points: Codable, Equatable, Sendable {
+        public var table: String?
+        public var today: Double
+        public var week: Double?
+        public var total: Double?
+        public var rank: Int
+        public var of: Int
+
+        public init(today: Double, rank: Int, of: Int, week: Double? = nil, total: Double? = nil, table: String? = nil) {
+            self.today = today
+            self.rank = rank
+            self.of = of
+            self.week = week
+            self.total = total
+            self.table = table
+        }
+
+        /// The menu's line: "1.240 Punkte heute · Platz 1 von 3", whole points, German grouping.
+        public var line: String {
+            let n = max(0, Int(today.rounded()))
+            var digits = String(n)
+            var groups: [String] = []
+            while digits.count > 3 {
+                groups.insert(String(digits.suffix(3)), at: 0)
+                digits.removeLast(3)
+            }
+            groups.insert(digits, at: 0)
+            return "\(groups.joined(separator: ".")) \(n == 1 ? "Punkt" : "Punkte") heute · Platz \(rank) von \(of)"
+        }
+    }
 
     public struct Refusal: Codable, Equatable, Sendable {
         public var kind: String
@@ -74,8 +111,8 @@ public enum WorkerEvent: Equatable, Sendable {
         case "log":
             return .log(leaseId: object["lease_id"] as? String, line: object["line"] as? String ?? "")
         case "result":
-            return .result(title: object["title"] as? String ?? "", verdict: object["verdict"] as? String ?? "",
-                           check: object["check"] as? String)
+            return .result(leaseId: object["lease_id"] as? String, title: object["title"] as? String ?? "",
+                           verdict: object["verdict"] as? String ?? "", check: object["check"] as? String)
         case "paused":
             return .paused(until: date("until"))
         case "update":
@@ -87,6 +124,10 @@ public enum WorkerEvent: Equatable, Sendable {
             guard let d = try? JSONSerialization.data(withJSONObject: object),
                   let model = try? JSONCoding.decoder.decode(Model.self, from: d) else { return nil }
             return .model(model)
+        case "points":
+            guard let d = try? JSONSerialization.data(withJSONObject: object),
+                  let points = try? JSONCoding.decoder.decode(Points.self, from: d), points.rank > 0, points.of > 0 else { return nil }
+            return .points(points)
         default:
             return nil
         }
@@ -106,6 +147,49 @@ public struct WorkerJob: Codable, Equatable, Sendable {
     public var fps: Double?
     public var speed: Double?
     public var etaS: Int?
+}
+
+extension WorkerJob {
+    /// The menu's line for this job (Thorsten, 2026-10-28: "Use Sub-menues for details"): what it
+    /// does, its title and its share, "Wandelt um: one_144_Hey_Siri · 12 %".
+    public var menuTitle: String {
+        let doing: String
+        switch phase {
+        case "downloading": doing = "Lädt"
+        case "checking": doing = "Prüft"
+        case "uploading": doing = "Sendet"
+        case "paused": doing = "Pausiert"
+        default: doing = kind == "whisper" ? "Hört zu" : "Wandelt um"
+        }
+        let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? leaseId ?? "Auftrag"
+        return "\(doing): \(name)" + menuShare
+    }
+
+    /// The end of `menuTitle`, " · 12 %", which the menu keeps when it cuts a long title.
+    public var menuShare: String { " · \(Int((fraction ?? 0) * 100)) %" }
+
+    /// Its submenu: the file, the rung, fps, speed, time left and the slot.
+    public var menuDetails: [String] {
+        var out: [String] = []
+        if let title, !title.isEmpty { out.append("Datei: \(title)") }
+        if kind == "whisper" {
+            out.append("Untertitel (Whisper)")
+        } else if let rung {
+            out.append("Stufe: \(rung)p")
+        }
+        if let fps { out.append("FPS: " + Self.de(fps, digits: fps < 10 ? 1 : 0)) }
+        if let speed { out.append("Tempo: " + Self.de(speed, digits: 1) + "× Echtzeit") }
+        if let etaS {
+            let rounded = etaS > 90 ? (etaS + 30) / 60 * 60 : etaS
+            out.append("Noch: " + Duration.seconds(rounded).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2)))
+        }
+        if let slot { out.append(slot == "high" ? "Platz: Sofort und Stufe 1" : "Platz: Normal") }
+        return out
+    }
+
+    static func de(_ v: Double, digits: Int) -> String {
+        v.formatted(.number.precision(.fractionLength(digits)).locale(Locale(identifier: "de_DE")))
+    }
 }
 
 /// Which flags the embedded worker takes, from its `-h` usage, so the app passes a newer flag

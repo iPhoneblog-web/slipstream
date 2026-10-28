@@ -165,6 +165,47 @@ final class MenuLineTests: XCTestCase {
         XCTAssertTrue(got.hasSuffix("cannot go into a filter)"))
         XCTAssertEqual(got.filter { $0 == "…" }.count, 1)
     }
+
+    // A job's share stays when its title is long; only the title is cut.
+    func testTheShareStays() {
+        let job = WorkerJob(leaseId: "l1", title: String(repeating: "one_144_Hey_Siri_", count: 6), fraction: 0.12)
+        let got = MenuLine.fit(job.menuTitle, keeping: job.menuShare, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasPrefix("Wandelt um: one_144_Hey_Siri_"))
+        XCTAssertTrue(got.hasSuffix("… · 12 %"))
+        let short = WorkerJob(leaseId: "l1", title: "one_144_Hey_Siri", fraction: 0.12)
+        XCTAssertEqual(MenuLine.fit(short.menuTitle, keeping: short.menuShare, measure: w), "Wandelt um: one_144_Hey_Siri · 12 %")
+    }
+}
+
+final class RunningJobsTests: XCTestCase {
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func testRunningJobs() {
+        var jobs = RunningJobs()
+        jobs.update(WorkerJob(leaseId: "a", title: "Archiv", slot: "normal", fraction: 0.1), at: t0)
+        jobs.update(WorkerJob(leaseId: "b", title: "Untertitel", kind: "whisper", slot: "high", fraction: 0.5), at: t0)
+        // A job keeps its place when its next event comes.
+        jobs.update(WorkerJob(leaseId: "a", title: "Archiv", slot: "normal", fraction: 0.2), at: t0 + 10)
+        XCTAssertEqual(jobs.jobs.map(\.leaseId), ["a", "b"])
+        XCTAssertEqual(jobs.jobs.first?.fraction, 0.2)
+        // b ended beside a and said nothing more: gone after `stale` seconds, not before.
+        XCTAssertFalse(jobs.expire(now: t0 + RunningJobs.stale - 1))
+        XCTAssertTrue(jobs.expire(now: t0 + RunningJobs.stale))
+        XCTAssertEqual(jobs.jobs.map(\.leaseId), ["a"])
+        // Its result ends a job at once; a result for a lease not running changes nothing.
+        jobs.end(lease: "x")
+        XCTAssertEqual(jobs.jobs.count, 1)
+        jobs.end(lease: "a")
+        XCTAssertTrue(jobs.isEmpty)
+        XCTAssertFalse(jobs.expire(now: t0 + 100))
+        // `idle` clears every job.
+        jobs.update(WorkerJob(leaseId: "c"), at: t0)
+        jobs.update(WorkerJob(leaseId: "d"), at: t0)
+        jobs.clear()
+        XCTAssertTrue(jobs.isEmpty)
+        XCTAssertFalse(jobs.expire(now: t0 + 100))
+    }
 }
 
 final class WorkerProtocolTests: XCTestCase {
@@ -181,6 +222,9 @@ final class WorkerProtocolTests: XCTestCase {
             return XCTFail()
         }
         XCTAssertEqual(high.slot, "high")
+        // A result names the lease it ends, so the menu drops that job's line.
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"result","lease_id":"l1","title":"Folge 12","verdict":"accepted"}"#),
+                       .result(leaseId: "l1", title: "Folge 12", verdict: "accepted", check: nil))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
@@ -196,6 +240,34 @@ final class WorkerProtocolTests: XCTestCase {
         // A model event without its name is no model.
         XCTAssertNil(WorkerEvent.parse(#"{"event":"model","state":"ready"}"#))
         XCTAssertNil(WorkerEvent.parse("not json"))
+        // encode-queue v0.2.15: this Mac's points and place, for the menu.
+        guard case .points(let p) = WorkerEvent.parse(#"{"event":"points","table":"v1","today":1240.4,"week":3000,"total":9000.5,"rank":1,"of":3}"#) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(p, .init(today: 1240.4, rank: 1, of: 3, week: 3000, total: 9000.5, table: "v1"))
+        XCTAssertEqual(p.line, "1.240 Punkte heute · Platz 1 von 3")
+        XCTAssertNil(WorkerEvent.parse(#"{"event":"points","today":5}"#)) // no place: no line
+    }
+
+    func testPointsLine() {
+        XCTAssertEqual(WorkerEvent.Points(today: 0, rank: 2, of: 3).line, "0 Punkte heute · Platz 2 von 3")
+        XCTAssertEqual(WorkerEvent.Points(today: 0.6, rank: 1, of: 1).line, "1 Punkt heute · Platz 1 von 1")
+        XCTAssertEqual(WorkerEvent.Points(today: 1_234_567.5, rank: 1, of: 2).line, "1.234.568 Punkte heute · Platz 1 von 2")
+        XCTAssertEqual(WorkerEvent.Points(today: 999.4, rank: 3, of: 3).line, "999 Punkte heute · Platz 3 von 3")
+    }
+
+    // Thorsten, 2026-10-28: "Use Sub-menues for details."
+    func testAJobsMenuLineAndItsDetails() {
+        let job = WorkerJob(leaseId: "l1", title: "one_144_Hey_Siri", kind: "rung", rung: "2160", slot: "normal", phase: "encoding",
+                            fraction: 0.123, fps: 2.34, speed: 0.09, etaS: 18_000)
+        XCTAssertEqual(job.menuTitle, "Wandelt um: one_144_Hey_Siri · 12 %")
+        XCTAssertEqual(job.menuDetails, ["Datei: one_144_Hey_Siri", "Stufe: 2160p", "FPS: 2,3", "Tempo: 0,1× Echtzeit", "Noch: 5h", "Platz: Normal"])
+        let captions = WorkerJob(leaseId: "l2", title: "Untertitel #529", kind: "whisper", slot: "high", phase: "downloading", fraction: 0.5)
+        XCTAssertEqual(captions.menuTitle, "Lädt: Untertitel #529 · 50 %")
+        XCTAssertEqual(captions.menuDetails, ["Datei: Untertitel #529", "Untertitel (Whisper)", "Platz: Sofort und Stufe 1"])
+        // A worker before v0.2.14 says no slot; a job without a title shows its lease.
+        XCTAssertEqual(WorkerJob(leaseId: "ls_X", kind: "rung", fps: 61).menuTitle, "Wandelt um: ls_X · 0 %")
+        XCTAssertEqual(WorkerJob(leaseId: "ls_X", kind: "rung", fps: 61).menuDetails, ["FPS: 61"])
     }
 
     func testCommands() {
