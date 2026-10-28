@@ -53,6 +53,7 @@ After it, one JSON object per line:
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason` | Settings → Leistung, "Whisper-Modelle" |
+| `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
 
 Its standard error goes to the log window, to the unified log (info level, which macOS does not
 keep) and to `~/Library/Logs/Slipstream/worker.log`.

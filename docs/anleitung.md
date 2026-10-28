@@ -35,6 +35,10 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 - **Was gerade läuft:** Titel, Stufe oder „Whisper“, Prozent, Bilder pro Sekunde, Tempo,
   Restzeit. Eine ProRes-Umwandlung steht hier auch.
 - **Die letzten Ergebnisse** und wie viele heute fertig wurden.
+- **Punkte**, zum Beispiel „1.240 Punkte heute · Platz 1 von 3“: was die heute angenommenen
+  Aufträge dieses Macs wert sind, und sein Platz unter allen gekoppelten Encodern. Ein Punkt ist
+  eine Minute Arbeit des Mac Studio; derselbe Auftrag bringt auf jedem Rechner gleich viele
+  Punkte. Das Funkhaus rechnet sie aus; sie entscheiden nicht, wer welchen Auftrag bekommt.
 - **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
   nur für Aufträge des Encoders, nie für ProRes.
 - **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
