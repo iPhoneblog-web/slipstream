@@ -146,7 +146,7 @@ final class CPUChoiceTests: XCTestCase {
         XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: .init(threads: 12, cores: 12)),
                        "CPU für den Encoder: 12 von 12 Kernen")
         XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: .init(threads: 3, cores: 12, throttled: 1)),
-                       "CPU für den Encoder: 3 von 12 Kernen (laufender Auftrag gedrosselt)")
+                       "CPU für den Encoder: 3 von 12, gedrosselt")
         // The efficiency cores (encode-queue v0.2.17): the worker's word, else the setting.
         XCTAssertEqual(CPUChoice.menuTitle(setting: 12, cores: 12, inEffect: .init(threads: 12, cores: 12, efficiency: "all")),
                        "CPU für den Encoder: nur Effizienzkerne")
@@ -196,8 +196,9 @@ final class MenuLineTests: XCTestCase {
         let line = #"Untertitel #529: fehlgeschlagen (other: the captions' path "/Users/alexolma/Library/Application Support/Slipstream/worker/work/ls_01M61102GCZ50V2N2WVXTBDWGA/input-captions" cannot go into a filter)"#
         let got = MenuLine.fit(line, measure: w)
         XCTAssertLessThanOrEqual(w(got), MenuLine.width)
-        XCTAssertTrue(got.hasPrefix("Untertitel #529: fehlgeschlagen"))
-        XCTAssertTrue(got.hasSuffix("cannot go into a filter)"))
+        // Three fifths of what fits from the start, the rest from the end (270 pt: 45 characters here).
+        XCTAssertTrue(got.hasPrefix("Untertitel #529: fehlgesch"), got)
+        XCTAssertTrue(got.hasSuffix("into a filter)"), got)
         XCTAssertEqual(got.filter { $0 == "…" }.count, 1)
     }
 

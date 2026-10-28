@@ -1,4 +1,5 @@
 import AppKit
+import SafariServices
 import Foundation
 import HelperCore
 import os
@@ -169,6 +170,27 @@ final class AppModel: ObservableObject {
 
     func openSite() {
         if let url = site?.url { NSWorkspace.shared.open(url) } else { showSetup() }
+    }
+
+    /// The Funkhaus in Safari, whatever the default browser: only Safari has the extension.
+    func openSiteInSafari() {
+        guard let url = site?.url else {
+            showSetup()
+            return
+        }
+        guard let safari = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Safari") else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        NSWorkspace.shared.open([url], withApplicationAt: safari, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    /// Safari's settings at Slipstream's extension, where it is turned on and allowed per site.
+    func showSafariExtensionSettings() {
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: SlipstreamIDs.extensionBundle) { [weak self] error in
+            guard let error else { return }
+            Task { @MainActor in self?.note("Safari's extension settings: \(error.localizedDescription)") }
+        }
     }
 
     /// "Slipstream bei der Anmeldung starten?" once: at the first launch, and once for an install
@@ -581,7 +603,7 @@ final class AppModel: ObservableObject {
         let now = Date()
         site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
         threadsSetting = 3
-        extensionSeen = now.addingTimeInterval(-120)
+        extensionSeen = UserDefaults.standard.bool(forKey: "menuPreviewNoExtension") ? nil : now.addingTimeInterval(-120)
         let events = [
             #"{"event":"connection","up":true}"#,
             #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fraction":0.12,"fps":9.4,"speed":0.38,"eta_s":1260}"#,

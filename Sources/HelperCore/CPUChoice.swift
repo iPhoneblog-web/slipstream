@@ -33,14 +33,17 @@ public struct CPUChoice: Equatable, Sendable, Identifiable {
 
 extension CPUChoice {
     /// The menu's line for the CPU limit: what is in effect, the worker's word once it has said
-    /// it (encode-queue v0.2.17), else the setting; "(laufender Auftrag gedrosselt)" while a
-    /// running job's tool, started with more threads, is held to it.
+    /// it (encode-queue v0.2.17), else the setting; ", gedrosselt" while a running job's tool,
+    /// started with more threads, is held to it.
     public static func menuTitle(setting: Int, cores: Int, inEffect: WorkerEvent.Limits?, efficiencyOnly: Bool = false) -> String {
         if let e = inEffect?.efficiency.flatMap(Efficiency.init(rawValue:)) ?? (inEffect == nil && efficiencyOnly ? .all : nil), e == .all {
             return "CPU für den Encoder: nur Effizienzkerne"
         }
-        let title = "CPU für den Encoder: \(inEffect?.threads ?? setting) von \(inEffect?.cores ?? cores) Kernen"
-        return (inEffect?.throttled ?? 0) > 0 ? title + " (laufender Auftrag gedrosselt)" : title
+        let threads = inEffect?.threads ?? setting, of = inEffect?.cores ?? cores
+        // Throttled, "Kernen" gives way to "gedrosselt", so the line stays as wide as the menu;
+        // the submenu says "Laufender Auftrag gedrosselt".
+        return (inEffect?.throttled ?? 0) > 0 ? "CPU für den Encoder: \(threads) von \(of), gedrosselt"
+            : "CPU für den Encoder: \(threads) von \(of) Kernen"
     }
 
     /// The tag of "Nur Effizienzkerne" among the core counts.
@@ -55,6 +58,9 @@ extension CPUChoice {
     /// leaves over. On the Mac Studio, at load averages of 80 to 140, an x265 encode in the background
     /// got 0.07 cores over a minute and no frame (encode-queue's README, "The efficiency cores").
     public static let efficiencyNote = "Läuft fast nur, wenn der Mac nichts anderes tut"
+
+    /// The same in the CPU submenu, in two lines as wide as the menu.
+    public static let efficiencyNoteLines = ["Effizienzkerne: läuft fast nur,", "wenn der Mac nichts anderes tut"]
 
     /// Settings' line under the switches: the slowdown and what it means.
     public static func efficiencyCaption(slowdown: Int?) -> String {
