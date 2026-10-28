@@ -51,6 +51,18 @@ final class AppModel: ObservableObject {
     /// The worker's word on the CPU limit in effect (encode-queue v0.2.17); nil before it, and
     /// from a worker before v0.2.17, which says nothing: the menu shows the setting then.
     @Published private(set) var workerLimits: WorkerEvent.Limits?
+    /// What the menu bar shows beside the icon (MenuBarItems; Einstellungen → Menüleiste).
+    @Published private(set) var menuBarItems = MenuBarItems.load(from: .standard)
+    /// The cores the worker and its tools keep busy, sampled once a second while the menu bar
+    /// shows them (ProcessCPU); nil otherwise.
+    @Published private(set) var workerCores: Double?
+    private let workerCPU = ProcessCPU()
+
+    func setMenuBarItem(_ item: MenuBarItem, _ on: Bool) {
+        menuBarItems = menuBarItems.with(item, on)
+        if !previewing { menuBarItems.save(to: defaults) }
+    }
+
     /// The CPU settings, for the menu's line until the worker answers them.
     @Published private(set) var threadsSetting = 0
     @Published private(set) var efficiencySetting = Efficiency.off
@@ -325,6 +337,9 @@ final class AppModel: ObservableObject {
         timers.append(Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         })
+        timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.sampleWorkerCPU() }
+        })
         startWorker()
     }
 
@@ -538,6 +553,16 @@ final class AppModel: ObservableObject {
         worker?.send(until.map { .pause(until: $0, mode: mode) } ?? .resume)
     }
 
+    /// Kerne and CPU % in the menu bar: the worker's and its tools' CPU, to a tenth of a core.
+    private func sampleWorkerCPU() {
+        guard menuBarItems.items.contains(.cores) || menuBarItems.items.contains(.cpu), let worker, worker.isRunning else {
+            if workerCores != nil { workerCores = nil }
+            return
+        }
+        let cores = workerCPU.sample(worker.pid).map { ($0 * 10).rounded() / 10 }
+        if cores != workerCores { workerCores = cores }
+    }
+
     private func tick() {
         let marker = Paths.appGroup.appendingPathComponent(SlipstreamIDs.extensionSeenFile)
         if let at = (try? FileManager.default.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date {
@@ -627,6 +652,8 @@ final class AppModel: ObservableObject {
             ResultLine(title: "ProRes: Interview_A.mov", verdict: "fertig", check: nil, at: now.addingTimeInterval(-4000)),
         ]
         finishedToday = 7
+        workerCores = 2.9
+        if UserDefaults.standard.bool(forKey: "menuPreviewPaused") { setPause(now.addingTimeInterval(2 * 3600), mode: .now, tellWorker: false) }
         // The first job's event once a second, as a running encode sends it, so the menu sees
         // what it sees beside a real job: a pause clicked while the model changes.
         var fraction = 0.12

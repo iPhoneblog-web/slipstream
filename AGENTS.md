@@ -82,7 +82,9 @@ says why; where a number cost a measurement, the message keeps the measurement.
 - **Beside a running Slipstream, look at the menu** in a Debug build started with
   `-menuPreview YES`: two sample jobs, the first sending its event once a second as a running
   encode does (`-menuPreviewTicker NO` stops that), results and points; it starts nothing and
-  leaves the app group file, the defaults and the log file alone. Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
+  leaves the app group file, the defaults and the log file alone. `-menuBarItems a,b` picks the
+  menu bar's items, `-menuPreviewPaused YES` pauses it, and `-menuBarRender <file.png>` draws the
+  menu bar's item to a file and quits (this Mac's shell may not capture the screen). Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
   app's extension.
 
 Say in the pull request which tests cover the change and what is still untested; the menu and
