@@ -145,15 +145,22 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            Line(l.state)
+            // One short line per thing; the details in submenus (Thorsten, 2026-10-28).
+            if l.jobs.isEmpty || l.pausedUntil != nil { Line(l.state) }
             if let problem = l.problem { Line(problem) }
-            if !l.job.isEmpty {
-                Divider()
-                ForEach(l.job, id: \.self) { Line($0) }
+            ForEach(l.jobs) { job in
+                Menu {
+                    ForEach(job.details, id: \.self) { Line($0) }
+                } label: {
+                    Text(MenuLine.fit(job.title, measure: MenuMirror.measure))
+                }
+                .help(job.title)
             }
 
             Divider()
-            ForEach(l.results, id: \.self) { Line($0) }
+            Menu("Letzte Ereignisse") {
+                ForEach(l.results, id: \.self) { Line($0) }
+            }
             Line(l.today)
 
             Divider()
@@ -178,9 +185,11 @@ struct MenuContent: View {
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
-            Line(l.connection)
-            ForEach(l.extensionLines, id: \.self) { Line($0) }
-            ForEach(l.refused, id: \.self) { Line($0) }
+            Menu(l.connectionWord) {
+                Line(l.connection)
+                ForEach(l.extensionLines, id: \.self) { Line($0) }
+                ForEach(l.refused, id: \.self) { Line($0) }
+            }
 
             Divider()
             Button("Funkhaus öffnen") { model.openSite() }

@@ -181,6 +181,9 @@ final class WorkerProtocolTests: XCTestCase {
             return XCTFail()
         }
         XCTAssertEqual(high.slot, "high")
+        // A result names the lease it ends, so the menu drops that job's line.
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"result","lease_id":"l1","title":"Folge 12","verdict":"accepted"}"#),
+                       .result(leaseId: "l1", title: "Folge 12", verdict: "accepted", check: nil))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
@@ -196,6 +199,20 @@ final class WorkerProtocolTests: XCTestCase {
         // A model event without its name is no model.
         XCTAssertNil(WorkerEvent.parse(#"{"event":"model","state":"ready"}"#))
         XCTAssertNil(WorkerEvent.parse("not json"))
+    }
+
+    // Thorsten, 2026-10-28: "Use Sub-menues for details."
+    func testAJobsMenuLineAndItsDetails() {
+        let job = WorkerJob(leaseId: "l1", title: "one_144_Hey_Siri", kind: "rung", rung: "2160", slot: "normal", phase: "encoding",
+                            fraction: 0.123, fps: 2.34, speed: 0.09, etaS: 18_000)
+        XCTAssertEqual(job.menuTitle, "Wandelt um: one_144_Hey_Siri · 12 %")
+        XCTAssertEqual(job.menuDetails, ["Datei: one_144_Hey_Siri", "Stufe: 2160p", "FPS: 2,3", "Tempo: 0,1× Echtzeit", "Noch: 5h", "Platz: Normal"])
+        let captions = WorkerJob(leaseId: "l2", title: "Untertitel #529", kind: "whisper", slot: "high", phase: "downloading", fraction: 0.5)
+        XCTAssertEqual(captions.menuTitle, "Lädt: Untertitel #529 · 50 %")
+        XCTAssertEqual(captions.menuDetails, ["Datei: Untertitel #529", "Untertitel (Whisper)", "Platz: Sofort und Stufe 1"])
+        // A worker before v0.2.14 says no slot; a job without a title shows its lease.
+        XCTAssertEqual(WorkerJob(leaseId: "ls_X", kind: "rung", fps: 61).menuTitle, "Wandelt um: ls_X · 0 %")
+        XCTAssertEqual(WorkerJob(leaseId: "ls_X", kind: "rung", fps: 61).menuDetails, ["FPS: 61"])
     }
 
     func testCommands() {
