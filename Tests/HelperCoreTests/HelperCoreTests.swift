@@ -199,6 +199,20 @@ final class WorkerProtocolTests: XCTestCase {
         // A model event without its name is no model.
         XCTAssertNil(WorkerEvent.parse(#"{"event":"model","state":"ready"}"#))
         XCTAssertNil(WorkerEvent.parse("not json"))
+        // encode-queue v0.2.15: this Mac's points and place, for the menu.
+        guard case .points(let p) = WorkerEvent.parse(#"{"event":"points","table":"v1","today":1240.4,"week":3000,"total":9000.5,"rank":1,"of":3}"#) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(p, .init(today: 1240.4, rank: 1, of: 3, week: 3000, total: 9000.5, table: "v1"))
+        XCTAssertEqual(p.line, "1.240 Punkte heute · Platz 1 von 3")
+        XCTAssertNil(WorkerEvent.parse(#"{"event":"points","today":5}"#)) // no place: no line
+    }
+
+    func testPointsLine() {
+        XCTAssertEqual(WorkerEvent.Points(today: 0, rank: 2, of: 3).line, "0 Punkte heute · Platz 2 von 3")
+        XCTAssertEqual(WorkerEvent.Points(today: 0.6, rank: 1, of: 1).line, "1 Punkt heute · Platz 1 von 1")
+        XCTAssertEqual(WorkerEvent.Points(today: 1_234_567.5, rank: 1, of: 2).line, "1.234.568 Punkte heute · Platz 1 von 2")
+        XCTAssertEqual(WorkerEvent.Points(today: 999.4, rank: 3, of: 3).line, "999 Punkte heute · Platz 3 von 3")
     }
 
     // Thorsten, 2026-10-28: "Use Sub-menues for details."

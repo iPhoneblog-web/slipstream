@@ -60,6 +60,7 @@ queue hands such a job out only while the Mac's free memory holds it.
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
+| `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
 
 Its standard error goes to the log window, to the unified log (info level, which macOS does not
 keep) and to `~/Library/Logs/Slipstream/worker.log`.

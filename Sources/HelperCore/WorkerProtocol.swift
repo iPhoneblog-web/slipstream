@@ -15,6 +15,42 @@ public enum WorkerEvent: Equatable, Sendable {
     case tools([Tool])
     /// One whisper model the queue wants this Mac to hold, at each change of its state (v0.2.7).
     case model(Model)
+    /// This Mac's points and its place today, when either changes (v0.2.15).
+    case points(Points)
+
+    /// What the queue says this Mac's accepted jobs earned by its points table (encode-queue
+    /// v0.2.15, "Punkte-Tabelle v1": one point is a minute of the Mac Studio's work), and its
+    /// place today among every paired worker. The queue computes them; the app only shows them.
+    public struct Points: Codable, Equatable, Sendable {
+        public var table: String?
+        public var today: Double
+        public var week: Double?
+        public var total: Double?
+        public var rank: Int
+        public var of: Int
+
+        public init(today: Double, rank: Int, of: Int, week: Double? = nil, total: Double? = nil, table: String? = nil) {
+            self.today = today
+            self.rank = rank
+            self.of = of
+            self.week = week
+            self.total = total
+            self.table = table
+        }
+
+        /// The menu's line: "1.240 Punkte heute · Platz 1 von 3", whole points, German grouping.
+        public var line: String {
+            let n = max(0, Int(today.rounded()))
+            var digits = String(n)
+            var groups: [String] = []
+            while digits.count > 3 {
+                groups.insert(String(digits.suffix(3)), at: 0)
+                digits.removeLast(3)
+            }
+            groups.insert(digits, at: 0)
+            return "\(groups.joined(separator: ".")) \(n == 1 ? "Punkt" : "Punkte") heute · Platz \(rank) von \(of)"
+        }
+    }
 
     public struct Refusal: Codable, Equatable, Sendable {
         public var kind: String
@@ -88,6 +124,10 @@ public enum WorkerEvent: Equatable, Sendable {
             guard let d = try? JSONSerialization.data(withJSONObject: object),
                   let model = try? JSONCoding.decoder.decode(Model.self, from: d) else { return nil }
             return .model(model)
+        case "points":
+            guard let d = try? JSONSerialization.data(withJSONObject: object),
+                  let points = try? JSONCoding.decoder.decode(Points.self, from: d), points.rank > 0, points.of > 0 else { return nil }
+            return .points(points)
         default:
             return nil
         }

@@ -162,6 +162,7 @@ struct MenuContent: View {
                 ForEach(l.results, id: \.self) { Line($0) }
             }
             Line(l.today)
+            if let points = l.points { Line(points) }
 
             Divider()
             if let until = l.pausedUntil {

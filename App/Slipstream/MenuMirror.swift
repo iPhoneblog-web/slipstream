@@ -30,6 +30,7 @@ final class MenuMirror: ObservableObject {
         /// "Letzte Ereignisse": the last ten results, newest first.
         var results: [String] = []
         var today = ""
+        var points: String?
         var pausedUntil: String?
         /// The top level's word, "Verbindung: verbunden", and its submenu's lines.
         var connectionWord = ""
@@ -48,6 +49,7 @@ final class MenuMirror: ObservableObject {
             }
             out += results
             out += [today, connectionWord, connection]
+            if let points { out.append(points) }
             out += extensionLines
             out += refused
             return out
@@ -144,6 +146,7 @@ final class MenuMirror: ObservableObject {
         l.results = m.results.isEmpty ? ["Noch keine Aufträge"]
             : m.results.map { "\($0.title): \(verdict($0.verdict))\($0.check.map { " (\($0))" } ?? "")" }
         l.today = "Heute fertig: \(m.finishedToday)"
+        l.points = m.points?.line
         l.pausedUntil = m.pausedUntil.map(time)
         let last = m.lastAnswer.map { ", letzte Antwort \(time($0))" } ?? ""
         switch m.connection {

@@ -46,6 +46,8 @@ final class AppModel: ObservableObject {
     /// a job in each kind of slot); the menu shows a line with a submenu for each.
     @Published private(set) var queueJobs: [WorkerJob] = []
     var queueJob: WorkerJob? { queueJobs.first }
+    /// The queue's last word on this Mac's points (encode-queue v0.2.15); nil before it.
+    @Published private(set) var points: WorkerEvent.Points?
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
     @Published private(set) var finishedToday = 0
@@ -419,6 +421,8 @@ final class AppModel: ObservableObject {
             } else {
                 models.append(m)
             }
+        case .points(let p):
+            points = p
         }
     }
 
