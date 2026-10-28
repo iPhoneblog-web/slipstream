@@ -22,6 +22,7 @@ final class MenuMirror: ObservableObject {
         var job: [String] = []
         var results: [String] = []
         var today = ""
+        var points: String?
         var pausedUntil: String?
         var connection = ""
         var extensionLines: [String] = []
@@ -108,6 +109,7 @@ final class MenuMirror: ObservableObject {
         l.results = m.results.isEmpty ? ["Noch keine Aufträge"]
             : m.results.map { "\($0.title): \(verdict($0.verdict))\($0.check.map { " (\($0))" } ?? "")" }
         l.today = "Heute fertig: \(m.finishedToday)"
+        l.points = m.points?.line
         l.pausedUntil = m.pausedUntil.map(time)
         let last = m.lastAnswer.map { ", letzte Antwort \(time($0))" } ?? ""
         switch m.connection {

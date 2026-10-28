@@ -42,6 +42,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var connection: Connection = .notPaired
     @Published private(set) var lastAnswer: Date?
     @Published private(set) var refused: [WorkerEvent.Refusal] = []
+    /// The queue's last word on this Mac's points (encode-queue v0.2.15); nil before it.
+    @Published private(set) var points: WorkerEvent.Points?
     @Published private(set) var queueJob: WorkerJob?
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
@@ -410,6 +412,8 @@ final class AppModel: ObservableObject {
             } else {
                 models.append(m)
             }
+        case .points(let p):
+            points = p
         }
     }
 
