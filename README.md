@@ -9,7 +9,8 @@ the menu bar and does two things:
   ([docs/encoding.md](docs/encoding.md)). Its Safari extension carries the file from the page to
   the app and the result back ([docs/extension-protocol.md](docs/extension-protocol.md)).
 - **Jobs from the queue.** Once paired, it runs encode-queue's worker, which takes encodes and
-  whisper runs from the server through its own WireGuard tunnel, at low priority
+  whisper runs from the server through its own WireGuard tunnel, normal jobs at low priority and
+  Sofort jobs ahead of them
   ([docs/worker.md](docs/worker.md)).
 
 Slipstream works for one Funkhaus site, set up at first launch. Its extension answers that site
