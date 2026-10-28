@@ -7,12 +7,14 @@
 # app's "settings tabs: start" on, its watchdog must log no wait of the main thread of 250 ms or
 # more (docs/traps.md, "A frozen Settings window"); it logs from 100 ms, and those are shown with
 # the app's log around them. 1.3.0's daemon call took 500 ms and more per call; a runner, a VM
-# slower than a Mac, may need over 100 ms for a tab's first layout. Runs in CI after bin/package. It refuses to run beside another
-# Slipstream: two apps would share one app group file, the one the Safari extension reads.
+# slower than a Mac, may need over 100 ms for a tab's first layout. Last, a cold start of a copy
+# whose worker answers `-h` 3 s late must survive (1.3.6 crashed there). Runs in CI after
+# bin/package. It refuses to run beside another Slipstream: two apps would share one app group
+# file, the one the Safari extension reads.
 #   bin/check-launch [path/to/Slipstream.app]    default dist/Slipstream.app
 set -euo pipefail
 cd "${0:A:h}/.."
-app=${1:-dist/Slipstream.app}
+app=${${1:-dist/Slipstream.app}:A}
 if pgrep -x Slipstream >/dev/null; then
   print "another Slipstream is running; not starting a second one" >&2
   exit 1
@@ -68,7 +70,7 @@ print "settings tabs: ok"
 # example.org's hosts serve no Funkhaus, so the check fails; the window shows it, nothing saves.
 # The app logs the link it took (AppModel.open), and the setup window is on screen beside Settings.
 since=$(date '+%Y-%m-%d %H:%M:%S')
-open -a "$PWD/$app" 'slipstream://connect?site=funkhaus.example.org'
+open -a "$app" 'slipstream://connect?site=funkhaus.example.org'
 logged "$since" "connect link: funkhaus.example.org" || { print "the app did not take the connect link within 10 s" >&2; exit 1; }
 windows 2 || { print "no setup window beside Settings after the connect link" >&2; exit 1; }
 sleep 3
@@ -91,3 +93,42 @@ for ms in ${(f)waits}; do
   fi
 done
 print "main thread: no wait of 250 ms or more${waits:+ (from 100 ms: ${(j:, :)${(f)waits}} ms)}"
+
+# A cold start with a worker slow to answer `-h`, as macOS makes a freshly updated app's helpers
+# while it checks them. SwiftUI builds the whole menu at launch; in 1.3.6 it did so while the
+# app waited for that answer inside a `static let`, its CPU picker read the same static, and
+# libdispatch ended the app at every launch after the update (docs/traps.md, "A static that runs
+# the run loop"). A copy of the app gets a worker that answers 3 s late; it must read the usage
+# and still run 3 s later.
+kill $pid 2>/dev/null || true
+wait $pid 2>/dev/null || true
+cold=$(mktemp -d)
+trap 'kill $pid 2>/dev/null || true; rm -rf "$cold"' EXIT
+ditto "$app" "$cold/Slipstream.app"
+w="$cold/Slipstream.app/Contents/Helpers/encode-worker"
+mkdir -p "${w:h}"
+[[ -f $w ]] && mv "$w" "$w.real"
+print -r -- '#!/bin/sh
+[ "$1" = -h ] && sleep 3
+[ -x "$0.real" ] && exec "$0.real" "$@"
+exit 1' > "$w"
+chmod 755 "$w"
+since=$(date '+%Y-%m-%d %H:%M:%S')
+"$cold/Slipstream.app/Contents/MacOS/Slipstream" &
+pid=$!
+alive() {
+  kill -0 $pid 2>/dev/null && return 0
+  wait $pid && st=0 || st=$?
+  print "the app ended at a cold start with a slow worker (status $st; 133 is SIGTRAP)" >&2
+  exit 1
+}
+for i in {1..20}; do
+  sleep 0.5
+  alive
+  /usr/bin/log show --start "$since" --predicate 'subsystem == "io.github.kyrios.slipstream" AND eventMessage CONTAINS "worker usage read in"' \
+    --style compact 2>/dev/null | grep -q "worker usage read in" && break
+  (( i < 20 )) || { print "the app did not read the worker's usage within 10 s" >&2; exit 1; }
+done
+sleep 3
+alive
+print "cold start with a slow worker: ok"

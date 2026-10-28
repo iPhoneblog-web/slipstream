@@ -78,7 +78,7 @@ needs no app is a Swift package (`swift test`).
 ```
 bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
 bin/fetch-worker     the worker and its tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's release
-bin/check-launch     starts the built app and checks that Settings opens (CI)
+bin/check-launch     starts the built app: Settings opens, and a cold start survives a slow worker (CI)
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
 bin/rungs.zsh        the intermediate's rate against the 1-point rule: intermediates, the 4K rung, VMAF
 swift test           the tests (the fixtures are committed)
