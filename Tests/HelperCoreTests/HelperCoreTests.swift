@@ -586,7 +586,10 @@ final class MenuBarTitleTests: XCTestCase {
         XCTAssertEqual(MenuBarTitle.text(MenuBarItems([.points]), MenuBarState(points: 1_234_567), width: 30, measure: w), "1.23…")
     }
 
-    /// The worker's cores count the tools it started: a child that spins, here.
+    /// The worker's cores count the tools it started: a child that spins, here. On a busy Mac the
+    /// child gets a fraction of a core, so the test waits for its CPU time, not for wall time, and
+    /// asks that the sample hold all of it. This process sleeps meanwhile: without the children
+    /// the sample would hold a few milliseconds.
     func testProcessCPUCountsTheChildren() throws {
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -594,12 +597,19 @@ final class MenuBarTitleTests: XCTestCase {
         try child.run()
         defer { child.terminate() }
         let cpu = ProcessCPU()
-        let me = getpid()
-        XCTAssertNil(cpu.sample(me, now: 0)) // the first sample has nothing to compare with
+        let me = getpid(), pid = child.processIdentifier
         let t0 = ProcessInfo.processInfo.systemUptime
-        Thread.sleep(forTimeInterval: 1)
-        let cores = try XCTUnwrap(cpu.sample(me, now: ProcessInfo.processInfo.systemUptime - t0))
-        XCTAssertGreaterThan(cores, 0.6, "the spinning child's core")
+        XCTAssertNil(cpu.sample(me, now: t0)) // the first sample has nothing to compare with
+        let start = try XCTUnwrap(ProcessCPU().treeSeconds(pid))
+        var got = 0.0
+        while got < 0.3, ProcessInfo.processInfo.systemUptime - t0 < 30 {
+            Thread.sleep(forTimeInterval: 0.05)
+            got = try XCTUnwrap(ProcessCPU().treeSeconds(pid)) - start
+        }
+        XCTAssertGreaterThanOrEqual(got, 0.3, "the child got no CPU in 30 s")
+        let t1 = ProcessInfo.processInfo.systemUptime
+        let cores = try XCTUnwrap(cpu.sample(me, now: t1))
+        XCTAssertGreaterThan(cores * (t1 - t0), got * 0.99, "the spinning child's CPU time")
         XCTAssertNil(ProcessCPU().treeSeconds(999_999)) // gone
     }
 }
