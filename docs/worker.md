@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.18`, toolchain 3; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.21`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
@@ -15,7 +15,7 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
 ## How the app runs it
 
 ```
-/usr/bin/nice -n 19 encode-worker --key-stdin --tunnel-file <support>/tunnel.conf
+encode-worker --key-stdin --tunnel-file <support>/tunnel.conf   (nice 0, QoS user-initiated)
   --state-dir <support>/worker --name <Mac name> --host-app-name Slipstream --host-app-version <x.y.z>
   --threads N --gpu true|false --jobs N
   --high-slots N   (only when the worker's -h lists it, v0.2.14 on)
