@@ -44,7 +44,13 @@ final class MenuMirror: ObservableObject {
         var connection = ""
         /// Why the encoder stopped, under "Encoder gestoppt, neuer Versuch …".
         var stopReason: String?
-        var extensionLines: [String] = []
+        /// "Safari-Extension: verbunden, zuletzt 20:01" in the Verbindung submenu; nil while the
+        /// extension never reached the app, which gets a submenu of its own with the steps.
+        var extensionSeen: String?
+        var extensionMissing = false
+        var siteHost = ""
+        /// The CPU submenu's first line, "Laufender Auftrag gedrosselt".
+        var throttled = false
         var refused: [String] = []
         var update: String?
         /// "In der Menüleiste zeigen": the items checked.
@@ -64,7 +70,7 @@ final class MenuMirror: ObservableObject {
             out += [today, cpu, connectionWord, connection]
             if let points { out.append(points) }
             if let stopReason { out.append(stopReason) }
-            out += extensionLines
+            if let extensionSeen { out.append(extensionSeen) }
             out += refused
             return out
         }
@@ -227,11 +233,12 @@ final class MenuMirror: ObservableObject {
             l.connectionWord = "Verbindung: Encoder gestoppt"
         }
         if let seen = m.extensionSeen {
-            l.extensionLines = ["Safari-Extension: verbunden, zuletzt \(time(seen))"]
+            l.extensionSeen = "Safari-Extension: verbunden, zuletzt \(time(seen))"
         } else {
-            l.extensionLines = ["Safari-Extension: noch nicht verbunden",
-                                "Funkhaus in Safari öffnen; sonst in Safari erlauben (Einstellungen → Erweiterungen → Slipstream, \(m.site?.host ?? ""))"]
+            l.extensionMissing = true
         }
+        l.siteHost = m.site?.host ?? ""
+        l.throttled = (m.workerLimits?.throttled ?? 0) > 0
         l.refused = m.refused.map { "Keine \($0.kind)-Aufträge: \($0.reason)" }
         l.update = m.updateAvailable
         l.menuBarItems = m.menuBarItems

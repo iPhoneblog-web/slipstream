@@ -84,7 +84,10 @@ says why; where a number cost a measurement, the message keeps the measurement.
   encode does (`-menuPreviewTicker NO` stops that), results and points; it starts nothing and
   leaves the app group file, the defaults and the log file alone. `-menuBarItems a,b` picks the
   menu bar's items, `-menuPreviewPaused YES` pauses it, and `-menuBarRender <file.png>` draws the
-  menu bar's item to a file and quits (this Mac's shell may not capture the screen). Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
+  menu bar's item to a file and quits. `-menuPreviewNoExtension YES` shows the menu before Safari
+  reached the app, and `-menuRender <file.png>` (with `-menuRenderSubmenu <title>` for one
+  submenu) draws the open menu's items at its real width and quits: this Mac's shell may not
+  record the screen. Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
   app's extension.
 
 Say in the pull request which tests cover the change and what is still untested; the menu and
