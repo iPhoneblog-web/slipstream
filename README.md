@@ -100,6 +100,7 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 | [docs/funkhaus-api.md](docs/funkhaus-api.md) | What a Funkhaus offers Slipstream: the well-known file, the page's messages, pairing |
 | [docs/extension-protocol.md](docs/extension-protocol.md) | The messages between the Funkhaus, the extension and the app |
 | [docs/worker.md](docs/worker.md) | How the app runs the queue's worker, and pairing |
+| [docs/logging.md](docs/logging.md) | The unified log, the log file, levels and categories, the log window |
 | [docs/tools.md](docs/tools.md) | ffmpeg, x265, x264, libass and its fonts, whisper.cpp: encode-queue's toolchain |
 | [docs/release.md](docs/release.md) | Tags, CI, signing, notarisation, the secrets, the certificate's end |
 | [docs/traps.md](docs/traps.md) | Safari, priority, encoding and signing traps |
@@ -111,6 +112,9 @@ Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made 
 ```
 /usr/bin/log show --last 1h --predicate 'subsystem == "io.github.kyrios.slipstream"'
 ```
+
+The same lines, with their level, are in `~/Library/Logs/Slipstream/slipstream.log`; the menu's
+"Protokoll anzeigen …" follows that file ([docs/logging.md](docs/logging.md)).
 
 Type `/usr/bin/log`, not `log`: zsh has a builtin of that name. Its files are in
 `~/Library/Application Support/Slipstream` (the ProRes jobs, the tunnel, the worker's state).

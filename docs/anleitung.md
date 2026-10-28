@@ -62,8 +62,13 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   solcher Auftrag läuft fast nur, wenn der Mac nichts anderes tut: macOS gibt ihm, was übrig
   bleibt. Bei viel Arbeit am Mac bekam er in einer Minute kaum etwas (0,07 Kerne). Menü und
   Einstellungen sagen beides dazu.
-- **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
-  `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
+- **Protokoll anzeigen …**, wenn etwas komisch aussieht. Das Fenster zeigt die neuesten Zeilen
+  und folgt neuen Zeilen, solange **Folgen** an ist; wer hochscrollt, schaltet es aus, am Ende
+  geht es wieder an. Oben wählt man **Fehler**, **Warnungen**, **Info** oder **Debug** und sucht
+  nach einem Wort. **Debug aufzeichnen** schreibt auch jedes Ereignis des Workers mit (aus, bis
+  man es einschaltet). **Kopieren** kopiert die sichtbaren Zeilen, **In Console öffnen** öffnet
+  die Datei `~/Library/Logs/Slipstream/slipstream.log` in der Konsole (dort auch unter
+  „Protokollberichte“).
 - **Verbindung: Encoder gestoppt** heißt: der Encoder-Teil von Slipstream läuft gerade nicht.
   Das Untermenü sagt, wann Slipstream ihn wieder startet (erst nach 10 Sekunden, bei
   wiederholtem Stopp seltener, höchstens alle 10 Minuten), und darunter, warum. ProRes für das
@@ -113,4 +118,4 @@ ein, solange Slipstream einen Auftrag hat.
 - **„Auf dem Mac ist kein Platz mehr frei.“**: Platz schaffen; 10 Minuten 4K brauchen etwa
   50 GB für die Kopie und 4 GB für das Ergebnis.
 - Alles andere: ein [Issue](../../../issues) öffnen, mit einem Bildschirmfoto und der Datei
-  `~/Library/Logs/Slipstream/worker.log` (Protokoll anzeigen → Im Finder zeigen).
+  `~/Library/Logs/Slipstream/slipstream.log` (Protokoll anzeigen → Im Finder zeigen).

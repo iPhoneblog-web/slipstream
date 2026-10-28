@@ -1,6 +1,5 @@
 import AppKit
 import HelperCore
-import os
 import SwiftUI
 
 @main
@@ -62,6 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "menuPreview") {
             model.preview()
+            if UserDefaults.standard.bool(forKey: "openLog") { model.showLog() }
+            if let path = UserDefaults.standard.string(forKey: "logRender") { LogView.render(model, to: path) }
             return
         }
         #endif
@@ -71,6 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // script checks that the window is on screen.
         if UserDefaults.standard.bool(forKey: "openSettings") {
             model.showSettings()
+        }
+        if UserDefaults.standard.bool(forKey: "openLog") {
+            model.showLog()
         }
     }
 
@@ -392,16 +396,15 @@ struct SettingsView: View {
         // logs any wait of the main thread.
         .task {
             guard UserDefaults.standard.bool(forKey: "cycleSettingsTabs") else { return }
-            let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "check")
             // After the launch has settled: the check counts waits from here on.
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            log.notice("settings tabs: start")
+            Log.notice(.app, "settings tabs: start")
             for t in ["performance", "site", "pairing", "general"] {
                 try? await Task.sleep(nanoseconds: 700_000_000)
-                log.notice("settings tab: \(t, privacy: .public)")
+                Log.notice(.app, "settings tab: \(t)")
                 tab = t
             }
-            log.notice("settings tabs cycled")
+            Log.notice(.app, "settings tabs cycled")
         }
     }
 }
@@ -598,41 +601,5 @@ struct SetupView: View {
         alert.messageText = "Safari mit ⌘Q beenden und neu öffnen"
         alert.informativeText = "Slipstream arbeitet jetzt für \(site.name) (\(site.host)). Erst nach einem Neustart von Safari antwortet die Extension dort zuverlässig."
         alert.runModal()
-    }
-}
-
-struct LogView: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            lines
-            Divider()
-            // The same lines, and older ones, as a file to send with a bug report.
-            HStack {
-                Text(WorkerLog.url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                    .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                Spacer()
-                Button("Im Finder zeigen") { NSWorkspace.shared.activateFileViewerSelecting([WorkerLog.url]) }
-            }
-            .padding(8)
-        }
-    }
-
-    private var lines: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(model.logLines.enumerated()), id: \.offset) { i, line in
-                        Text(line).font(.caption.monospaced()).textSelection(.enabled).id(i)
-                    }
-                }
-                .padding(8)
-            }
-            .onChange(of: model.logLines.count) { proxy.scrollTo(model.logLines.count - 1, anchor: .bottom) }
-        }
-        .overlay {
-            if model.logLines.isEmpty { Text("Noch keine Zeilen vom Worker.").foregroundStyle(.secondary) }
-        }
     }
 }
