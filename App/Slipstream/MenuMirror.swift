@@ -11,8 +11,7 @@ import HelperCore
 @MainActor
 final class MenuMirror: ObservableObject {
     enum Icon: Equatable {
-        case idle, paused, down
-        case progress(Int)
+        case idle, busy, paused, down
     }
 
     struct Lines: Equatable {
@@ -48,6 +47,8 @@ final class MenuMirror: ObservableObject {
         var extensionLines: [String] = []
         var refused: [String] = []
         var update: String?
+        /// "In der Menüleiste zeigen": the items checked.
+        var menuBarItems = MenuBarItems.standard
 
         /// Every line the menu shows as text, in submenus too.
         var all: [String] {
@@ -69,6 +70,10 @@ final class MenuMirror: ObservableObject {
 
     @Published private(set) var lines = Lines()
     @Published private(set) var icon = Icon.idle
+    /// The text beside the icon (MenuBarTitle), at most once a second.
+    @Published private(set) var title = ""
+    private var titleAt = Date.distantPast
+    private var titleLater: DispatchWorkItem?
 
     private weak var model: AppModel?
     private var tracking = false
@@ -113,11 +118,44 @@ final class MenuMirror: ObservableObject {
         }
         let newIcon = Self.icon(model)
         if newIcon != icon { icon = newIcon }
+        updateTitle(model)
+    }
+
+    private func updateTitle(_ model: AppModel) {
+        let newTitle = MenuBarTitle.text(model.menuBarItems, Self.barState(model), measure: Self.barMeasure)
+        guard newTitle != title else { return }
+        let wait = 1 - Date().timeIntervalSince(titleAt)
+        guard wait <= 0 else {
+            if titleLater == nil {
+                let item = DispatchWorkItem { [weak self] in
+                    self?.titleLater = nil
+                    if let m = self?.model { self?.updateTitle(m) }
+                }
+                titleLater = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: item)
+            }
+            return
+        }
+        title = newTitle
+        titleAt = Date()
+    }
+
+    /// What the menu bar's items are made of.
+    static func barState(_ m: AppModel) -> MenuBarState {
+        let threads = m.workerLimits?.threads ?? (m.threadsSetting > 0 ? m.threadsSetting : AppModel.maxThreads)
+        return MenuBarState(paused: m.pausedUntil != nil, fraction: m.proresJob?.fraction ?? m.queueJob?.fraction,
+                            etaS: m.proresJob?.etaS ?? m.queueJob?.etaS, fps: m.proresJob?.fps ?? m.queueJob?.fps,
+                            coresBusy: m.workerCores, coresAllowed: threads, points: m.points?.today)
+    }
+
+    /// A width in the menu bar's font, its digits monospaced as the label shows them.
+    static func barMeasure(_ s: String) -> Double {
+        Double((s as NSString).size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)]).width)
     }
 
     static func icon(_ m: AppModel) -> Icon {
         if m.pausedUntil != nil { return .paused }
-        if let f = m.proresJob?.fraction ?? m.queueJob?.fraction { return .progress(Int(f * 100)) }
+        if m.proresJob != nil || m.queueJob != nil { return .busy }
         if m.connection == .down { return .down }
         return .idle
     }
@@ -194,6 +232,7 @@ final class MenuMirror: ObservableObject {
         }
         l.refused = m.refused.map { "Keine \($0.kind)-Aufträge: \($0.reason)" }
         l.update = m.updateAvailable
+        l.menuBarItems = m.menuBarItems
         return l
     }
 
