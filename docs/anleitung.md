@@ -52,9 +52,13 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   einem Update von Slipstream fragt Safari das neu).
 - **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
   (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, ob Whisper die GPU
-  nutzen darf, Aufträge gleichzeitig, und die Whisper-Modelle: welche das Funkhaus will, ob sie
-  laden oder bereit sind, wie schnell, wie viel Platz sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
+  nutzen darf, Aufträge gleichzeitig, die Plätze dazu für Sofort und Stufe 1, und die
+  Whisper-Modelle: welche das Funkhaus will (auf jedem Mac small und large-v3-turbo, das eine
+  Untertitel-Modell, rund 2,1 GB), ob sie laden oder bereit sind, wie schnell, wie viel Platz
+  sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
+- **Lange Zeilen** kürzt das Menü mit „…“, damit es nicht breiter als etwa 420 Punkt wird; ein Pfad
+  verliert seine Mitte. Den ganzen Text zeigt der Tooltip, und „Protokoll anzeigen …“ hat ihn auch.
 - **Beenden** während einer Umwandlung fragt nach und gibt den Auftrag zurück.
 - **Bei der Anmeldung starten** (beim ersten Start fragt Slipstream einmal, „Ja“ ist
   vorgewählt; in den Einstellungen umschaltbar): Slipstream startet mit jeder Anmeldung. macOS zeigt es unter Systemeinstellungen → Allgemein →

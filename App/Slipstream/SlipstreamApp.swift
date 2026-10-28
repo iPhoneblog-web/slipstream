@@ -119,6 +119,17 @@ struct MenuIcon: View {
     }
 }
 
+/// A line of the menu, cut to the menu's width (MenuLine); the whole text is its tooltip and, once
+/// cut, in the log window.
+struct Line: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(MenuLine.fit(text, measure: MenuMirror.measure)).help(text)
+    }
+}
+
 /// The menu: text from the mirror, which stands still while the menu is open; actions on the
 /// model.
 struct MenuContent: View {
@@ -134,16 +145,16 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            Text(l.state)
-            if let problem = l.problem { Text(problem) }
+            Line(l.state)
+            if let problem = l.problem { Line(problem) }
             if !l.job.isEmpty {
                 Divider()
-                ForEach(l.job, id: \.self) { Text($0) }
+                ForEach(l.job, id: \.self) { Line($0) }
             }
 
             Divider()
-            ForEach(l.results, id: \.self) { Text($0) }
-            Text(l.today)
+            ForEach(l.results, id: \.self) { Line($0) }
+            Line(l.today)
 
             Divider()
             if let until = l.pausedUntil {
@@ -167,9 +178,9 @@ struct MenuContent: View {
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
-            Text(l.connection)
-            ForEach(l.extensionLines, id: \.self) { Text($0) }
-            ForEach(l.refused, id: \.self) { Text($0) }
+            Line(l.connection)
+            ForEach(l.extensionLines, id: \.self) { Line($0) }
+            ForEach(l.refused, id: \.self) { Line($0) }
 
             Divider()
             Button("Funkhaus öffnen") { model.openSite() }
@@ -234,6 +245,7 @@ struct SettingsView: View {
     @AppStorage("threads") private var threads = AppModel.maxThreads
     @AppStorage("gpu") private var gpu = true
     @AppStorage("jobs") private var jobs = 1
+    @AppStorage("highSlots") private var highSlots = 1
     @State private var identity: PairingIdentity?
     /// The real state: the user can turn it off in System Settings → Allgemein → Anmeldeobjekte.
     /// nil until macOS answered, off the main thread (LoginItem).
@@ -268,7 +280,12 @@ struct SettingsView: View {
                     Text("1").tag(1)
                     Text("2").tag(2)
                 }
-                Text("Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
+                Picker("Dazu für Sofort und Stufe 1", selection: $highSlots) {
+                    Text("keiner").tag(0)
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                }
+                Text("Aufträge gleichzeitig nimmt jeden Auftrag. Die Plätze für Sofort und Stufe 1 nehmen nur diese, auch neben einem langen Archiv-Auftrag, wenn der Arbeitsspeicher reicht. Gilt nur für Aufträge aus der Warteschlange. ProRes für das Funkhaus läuft auf der Media Engine.")
                     .font(.caption).foregroundStyle(.secondary)
                 ModelsSection(model: model)
             }
@@ -304,6 +321,7 @@ struct SettingsView: View {
         .onChange(of: threads) { model.limitsChanged() }
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
+        .onChange(of: highSlots) { model.limitsChanged() }
         // The keychain and the login item answer off the main thread; the window never waits.
         .task { identity = try? await Task.detached { try await AppPairing { _ in }.identity() }.value }
         .task { loginItem = await LoginItem.isOn() }

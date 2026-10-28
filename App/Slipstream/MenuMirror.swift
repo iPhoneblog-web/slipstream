@@ -27,6 +27,18 @@ final class MenuMirror: ObservableObject {
         var extensionLines: [String] = []
         var refused: [String] = []
         var update: String?
+
+        /// Every line the menu shows as text.
+        var all: [String] {
+            var out = [state]
+            if let problem { out.append(problem) }
+            out += job
+            out += results
+            out += [today, connection]
+            out += extensionLines
+            out += refused
+            return out
+        }
     }
 
     @Published private(set) var lines = Lines()
@@ -67,7 +79,12 @@ final class MenuMirror: ObservableObject {
         }
         pending = false
         let newLines = Self.lines(model)
-        if newLines != lines { lines = newLines }
+        if newLines != lines {
+            lines = newLines
+            for line in newLines.all where MenuLine.fit(line, measure: Self.measure) != line {
+                model.logCutLine(line)
+            }
+        }
         let newIcon = Self.icon(model)
         if newIcon != icon { icon = newIcon }
     }
@@ -80,6 +97,11 @@ final class MenuMirror: ObservableObject {
     }
 
     private static func time(_ d: Date) -> String { d.formatted(date: .omitted, time: .shortened) }
+
+    /// A line's width in the menu's font.
+    static func measure(_ s: String) -> Double {
+        Double((s as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width)
+    }
 
     static func lines(_ m: AppModel) -> Lines {
         var l = Lines()

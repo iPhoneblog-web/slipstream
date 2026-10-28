@@ -99,6 +99,8 @@ public struct WorkerJob: Codable, Equatable, Sendable {
     public var title: String?
     public var kind: String?
     public var rung: String?
+    /// `normal` or `high`: the slot it runs in (encode-queue v0.2.14).
+    public var slot: String?
     public var phase: String?
     public var fraction: Double?
     public var fps: Double?
@@ -135,7 +137,9 @@ public enum WorkerEnvironment {
 public enum WorkerCommand: Equatable, Sendable {
     case pause(until: Date)
     case resume
-    case limits(threads: Int, gpu: Bool, jobs: Int)
+    /// `jobs`: the normal slots, which take every job; `highSlots`: the high-priority slots on top,
+    /// which take only Sofort and Stufe 1 (encode-queue v0.2.14; an older worker ignores them).
+    case limits(threads: Int, gpu: Bool, jobs: Int, highSlots: Int)
     /// Give every lease back (reason `quit`) and exit.
     case quit
 
@@ -146,8 +150,8 @@ public enum WorkerCommand: Equatable, Sendable {
             object = ["cmd": "pause", "until": ISO8601DateFormatter().string(from: until)]
         case .resume:
             object = ["cmd": "resume"]
-        case .limits(let threads, let gpu, let jobs):
-            object = ["cmd": "limits", "threads": threads, "gpu": gpu, "jobs": jobs]
+        case .limits(let threads, let gpu, let jobs, let highSlots):
+            object = ["cmd": "limits", "threads": threads, "gpu": gpu, "jobs": jobs, "high_slots": highSlots]
         case .quit:
             object = ["cmd": "quit"]
         }

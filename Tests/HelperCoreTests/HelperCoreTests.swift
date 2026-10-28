@@ -139,6 +139,34 @@ final class CPUChoiceTests: XCTestCase {
     }
 }
 
+final class MenuLineTests: XCTestCase {
+    /// 6 pt a character, about the menu font's average.
+    private func w(_ s: String) -> Double { Double(s.count) * 6 }
+
+    func testAShortLineStays() {
+        XCTAssertEqual(MenuLine.fit("Tunnel verbunden, letzte Antwort 13:51", measure: w), "Tunnel verbunden, letzte Antwort 13:51")
+    }
+
+    func testALongLineEndsInAnEllipsis() {
+        let long = String(repeating: "Ein langer Fehler ohne Pfad, ", count: 10)
+        let got = MenuLine.fit(long, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasSuffix("…"))
+        XCTAssertTrue(long.hasPrefix(String(got.dropLast())))
+        XCTAssertGreaterThan(w(got), MenuLine.width - 12) // as long as fits
+    }
+
+    // Alex's Vimes, 2026-10-28: the line that made the menu as wide as the screen.
+    func testAPathIsCutInTheMiddle() {
+        let line = #"Untertitel #529: fehlgeschlagen (other: the captions' path "/Users/alexolma/Library/Application Support/Slipstream/worker/work/ls_01M61102GCZ50V2N2WVXTBDWGA/input-captions" cannot go into a filter)"#
+        let got = MenuLine.fit(line, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasPrefix("Untertitel #529: fehlgeschlagen"))
+        XCTAssertTrue(got.hasSuffix("cannot go into a filter)"))
+        XCTAssertEqual(got.filter { $0 == "…" }.count, 1)
+    }
+}
+
 final class WorkerProtocolTests: XCTestCase {
     func testEvents() {
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"connection","up":true,"refused":[{"kind":"rung","reason":"x265 4.0 statt 4.1"}]}"#),
@@ -148,6 +176,11 @@ final class WorkerProtocolTests: XCTestCase {
         }
         XCTAssertEqual(job.rung, "2160")
         XCTAssertEqual(job.etaS, 600)
+        XCTAssertNil(job.slot) // a worker before encode-queue v0.2.14
+        guard case .job(let high) = WorkerEvent.parse(#"{"event":"job","lease_id":"l2","kind":"whisper","slot":"high","phase":"encoding"}"#) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(high.slot, "high")
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
@@ -167,8 +200,10 @@ final class WorkerProtocolTests: XCTestCase {
 
     func testCommands() {
         XCTAssertEqual(WorkerCommand.quit.line, "{\"cmd\":\"quit\"}\n")
-        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1).line,
-                       "{\"cmd\":\"limits\",\"gpu\":true,\"jobs\":1,\"threads\":8}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1, highSlots: 1).line,
+                       "{\"cmd\":\"limits\",\"gpu\":true,\"high_slots\":1,\"jobs\":1,\"threads\":8}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 4, gpu: false, jobs: 2, highSlots: 0).line,
+                       "{\"cmd\":\"limits\",\"gpu\":false,\"high_slots\":0,\"jobs\":2,\"threads\":4}\n")
         XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0)).line,
                        "{\"cmd\":\"pause\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
     }
@@ -195,6 +230,10 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertTrue(WorkerFlags.supports("whisper-version", usage: v027))
         // A word in a description is no flag.
         XCTAssertFalse(WorkerFlags.supports("versions", usage: v028))
+        // encode-queue v0.2.14 takes --high-slots; v0.2.13 would stop at it.
+        let v0214 = v028 + "  -high-slots int\n    \thigh-priority slots on top, for jobs of priority now and stage1 only; 0 none (EQ_HIGH_PRIORITY_SLOTS) (default 1)\n"
+        XCTAssertFalse(WorkerFlags.supports("high-slots", usage: v028))
+        XCTAssertTrue(WorkerFlags.supports("high-slots", usage: v0214))
     }
 
     func testLineBuffer() {
