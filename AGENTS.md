@@ -41,6 +41,9 @@ git -C <any checkout> worktree add ~/worktrees/slipstream/<topic> -b <topic> ori
 
 - **Every change is a pull request onto `main`.** Squash only, so one pull request is one commit.
   Never push to `main`.
+- **A release has its notes**, `release-notes/<version>.md` (German, a few bullets for the people
+  who use it), merged before the tag; CI fails a tag without them ([docs/release.md](docs/release.md),
+  "Release notes").
 - **A release is a tag `v<major>.<minor>.<patch>`** on `main`, pushed after the merge:
   `git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1`. CI builds,
   signs, notarises and publishes it; never upload a build from a Mac by hand. `bin/package`

@@ -1,6 +1,7 @@
 # Every push and pull request: the tests, then a signed and notarised build on Apple Silicon. A
-# tag `v<major>.<minor>.<patch>` also publishes the release: Slipstream.dmg, Slipstream.zip,
-# appcast.xml, SHA256SUMS and SHA256SUMS.sig, under names that stay the same, so
+# tag `v<major>.<minor>.<patch>` also publishes the release, with release-notes/<version>.md in
+# the appcast and above the install steps (a tag without it fails at once): Slipstream.dmg,
+# Slipstream.zip, appcast.xml, SHA256SUMS and SHA256SUMS.sig, under names that stay the same, so
 # .../releases/latest/download/ is always the newest (Sparkle reads appcast.xml there). A
 # manual run of sign-sums.yml signs an older release's SHA256SUMS. docs/release.md.
 #
@@ -32,6 +33,11 @@ jobs:
           sysctl -n machdep.cpu.brand_string
       - name: Test
         run: swift test
+      # A release needs its notes, for Sparkle's update dialog and the GitHub release
+      # (docs/release.md, "Release notes"): checked before anything is built.
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: swift run release-notes "$GITHUB_REF_NAME"
       # The extension's origin checks (docs/traps.md, "Origins") on the real scripts.
       - name: Test the extension
         run: node --test Tests/extension/*.test.mjs
@@ -55,6 +61,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bin/fetch-worker
+
+      # On a tag, before any secret: the version's notes as HTML for the appcast and as Markdown
+      # for the release (docs/release.md, "Release notes").
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: swift run release-notes "$GITHUB_REF_NAME" "$RUNNER_TEMP/notes"
 
       - name: Signing identity and notary key
         if: env.HAS_SECRETS == 'true'
@@ -100,9 +112,10 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           info=dist/Slipstream.app/Contents/Info.plist
+          cp "$RUNNER_TEMP/notes/release-notes.md" dist/
           swift tools/appcast.swift dist/Slipstream.zip "$(plutil -extract CFBundleShortVersionString raw $info)" \
             "$(plutil -extract CFBundleVersion raw $info)" "https://github.com/$REPO/releases/download/$TAG/Slipstream.zip" \
-            "$(plutil -extract SUPublicEDKey raw $info)" dist/appcast.xml
+            "$(plutil -extract SUPublicEDKey raw $info)" "$RUNNER_TEMP/notes/release-notes.html" dist/appcast.xml
           swift tools/sign.swift dist/SHA256SUMS "$(plutil -extract SUPublicEDKey raw $info)" dist/SHA256SUMS.sig
 
       - name: Remove the signing keychain
@@ -135,6 +148,7 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/appcast.xml
+            dist/release-notes.md
             dist/SHA256SUMS
             dist/SHA256SUMS.sig
 
@@ -157,7 +171,10 @@ jobs:
         run: |
           cd dist
           sha256sum -c SHA256SUMS
+          test -s release-notes.md || { echo "no release-notes.md: the release would say nothing of what changed" >&2; exit 1; }
           {
+            cat release-notes.md
+            echo
             echo "Slipstream ${TAG#v} for Macs with Apple Silicon, macOS 14 or later."
             echo
             echo "Download **Slipstream.dmg**, open it and drag the app onto Programme. Installed"

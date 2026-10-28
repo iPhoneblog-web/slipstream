@@ -159,6 +159,11 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
+            // After an update, once: what is new (release-notes/, Thorsten 2026-10-28).
+            if let version = l.newVersion {
+                Button("Neu in \(version) …") { model.showWhatsNew() }
+                Divider()
+            }
             // One short line per thing; the details in submenus (Thorsten, 2026-10-28).
             if l.jobs.isEmpty || l.pausedUntil != nil { Line(l.state) }
             if let problem = l.problem { Line(problem) }
@@ -252,6 +257,12 @@ enum About {
     @MainActor
     static func show(_ model: AppModel) {
         var lines: [String] = []
+        // Was ist neu: this version's notes above the tools (release-notes/).
+        if let notes = model.releaseNotes.first(where: { $0.version == model.version }) {
+            lines.append("Was ist neu in \(notes.version):")
+            lines.append(contentsOf: notes.plain)
+            lines.append("")
+        }
         let tools = model.tools.isEmpty ? bundledTools() : model.tools.map { "\($0.name) \($0.version)" }
         lines.append(contentsOf: tools)
         if let latest = model.updateAvailable { lines.append("Update verfügbar: \(latest)") }
@@ -285,6 +296,29 @@ enum About {
             return ["Ohne Worker und Werkzeuge"]
         }
         return text.split(separator: "\n").map(String.init)
+    }
+}
+
+/// "Neu in …": the notes of each version since the last one seen, newest first.
+struct WhatsNewView: View {
+    let notes: [ReleaseNotes]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if notes.isEmpty { Text("Zu dieser Version gibt es keine Notizen.") }
+                ForEach(notes, id: \.version) { n in
+                    Text("Neu in \(n.version)").font(.headline).padding(.top, 4)
+                    ForEach(n.bullets, id: \.self) { b in
+                        // **fett** as the file has it.
+                        Text((try? AttributedString(markdown: "• " + b)) ?? AttributedString("• " + b))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
