@@ -59,6 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A write to a worker that just died must fail with EPIPE, not end the app.
         signal(SIGPIPE, SIG_IGN)
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "menuPreview") {
+            model.preview()
+            return
+        }
+        #endif
         watchdog.start()
         model.start()
         // bin/check-launch: `-openSettings YES` opens Settings the way the menu does, and the
@@ -152,7 +158,7 @@ struct MenuContent: View {
                 Menu {
                     ForEach(job.details, id: \.self) { Line($0) }
                 } label: {
-                    Text(MenuLine.fit(job.title, measure: MenuMirror.measure))
+                    Text(MenuLine.fit(job.title, keeping: job.share, measure: MenuMirror.measure))
                 }
                 .help(job.title)
             }
@@ -188,6 +194,7 @@ struct MenuContent: View {
             Divider()
             Menu(l.connectionWord) {
                 Line(l.connection)
+                if let reason = l.stopReason { Line(reason) }
                 ForEach(l.extensionLines, id: \.self) { Line($0) }
                 ForEach(l.refused, id: \.self) { Line($0) }
             }

@@ -165,6 +165,47 @@ final class MenuLineTests: XCTestCase {
         XCTAssertTrue(got.hasSuffix("cannot go into a filter)"))
         XCTAssertEqual(got.filter { $0 == "…" }.count, 1)
     }
+
+    // A job's share stays when its title is long; only the title is cut.
+    func testTheShareStays() {
+        let job = WorkerJob(leaseId: "l1", title: String(repeating: "one_144_Hey_Siri_", count: 6), fraction: 0.12)
+        let got = MenuLine.fit(job.menuTitle, keeping: job.menuShare, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasPrefix("Wandelt um: one_144_Hey_Siri_"))
+        XCTAssertTrue(got.hasSuffix("… · 12 %"))
+        let short = WorkerJob(leaseId: "l1", title: "one_144_Hey_Siri", fraction: 0.12)
+        XCTAssertEqual(MenuLine.fit(short.menuTitle, keeping: short.menuShare, measure: w), "Wandelt um: one_144_Hey_Siri · 12 %")
+    }
+}
+
+final class RunningJobsTests: XCTestCase {
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func testRunningJobs() {
+        var jobs = RunningJobs()
+        jobs.update(WorkerJob(leaseId: "a", title: "Archiv", slot: "normal", fraction: 0.1), at: t0)
+        jobs.update(WorkerJob(leaseId: "b", title: "Untertitel", kind: "whisper", slot: "high", fraction: 0.5), at: t0)
+        // A job keeps its place when its next event comes.
+        jobs.update(WorkerJob(leaseId: "a", title: "Archiv", slot: "normal", fraction: 0.2), at: t0 + 10)
+        XCTAssertEqual(jobs.jobs.map(\.leaseId), ["a", "b"])
+        XCTAssertEqual(jobs.jobs.first?.fraction, 0.2)
+        // b ended beside a and said nothing more: gone after `stale` seconds, not before.
+        XCTAssertFalse(jobs.expire(now: t0 + RunningJobs.stale - 1))
+        XCTAssertTrue(jobs.expire(now: t0 + RunningJobs.stale))
+        XCTAssertEqual(jobs.jobs.map(\.leaseId), ["a"])
+        // Its result ends a job at once; a result for a lease not running changes nothing.
+        jobs.end(lease: "x")
+        XCTAssertEqual(jobs.jobs.count, 1)
+        jobs.end(lease: "a")
+        XCTAssertTrue(jobs.isEmpty)
+        XCTAssertFalse(jobs.expire(now: t0 + 100))
+        // `idle` clears every job.
+        jobs.update(WorkerJob(leaseId: "c"), at: t0)
+        jobs.update(WorkerJob(leaseId: "d"), at: t0)
+        jobs.clear()
+        XCTAssertTrue(jobs.isEmpty)
+        XCTAssertFalse(jobs.expire(now: t0 + 100))
+    }
 }
 
 final class WorkerProtocolTests: XCTestCase {

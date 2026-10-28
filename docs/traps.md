@@ -25,7 +25,8 @@ Things that cost time once, so they cost it only once. Each says what happens an
   new build of the app registers the extension anew: after replacing 1.0.0 with 1.0.1 the
   Funkhaus got no answer to its hello ("ProRes geht hier nicht"), though the extension was on.
   Allow the Funkhaus site again in Safari → Einstellungen → Erweiterungen → Slipstream. The
-  menu's line "Safari-Extension" says whether the extension reached the app since it started.
+  line "Safari-Extension" in the menu's "Verbindung" submenu says whether the extension reached
+  the app since it started.
 - **A Safari that was running before an install or update keeps the old extension**: after
   1.0.3 was deleted and 1.1.0 installed, the Funkhaus got no answer until Safari was quit with
   ⌘Q (2026-10-27). The install steps and the setup window say so.

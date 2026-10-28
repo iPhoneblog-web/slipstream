@@ -24,6 +24,8 @@ final class MenuMirror: ObservableObject {
         struct Job: Equatable, Identifiable {
             var id: String
             var title: String
+            /// The end of `title`, " · 12 %", which stays when the title is cut.
+            var share: String
             var details: [String]
         }
         var jobs: [Job] = []
@@ -35,6 +37,8 @@ final class MenuMirror: ObservableObject {
         /// The top level's word, "Verbindung: verbunden", and its submenu's lines.
         var connectionWord = ""
         var connection = ""
+        /// Why the encoder stopped, under "Encoder gestoppt, neuer Versuch …".
+        var stopReason: String?
         var extensionLines: [String] = []
         var refused: [String] = []
         var update: String?
@@ -50,6 +54,7 @@ final class MenuMirror: ObservableObject {
             out += results
             out += [today, connectionWord, connection]
             if let points { out.append(points) }
+            if let stopReason { out.append(stopReason) }
             out += extensionLines
             out += refused
             return out
@@ -136,12 +141,13 @@ final class MenuMirror: ObservableObject {
         }
         l.problem = m.problem
         if let job = m.proresJob {
-            l.jobs.append(.init(id: "prores-\(job.uploadId)", title: "Wandelt um: ProRes \(job.name) · \(Int(job.fraction * 100)) %",
+            let share = " · \(Int(job.fraction * 100)) %"
+            l.jobs.append(.init(id: "prores-\(job.uploadId)", title: "Wandelt um: ProRes \(job.name)" + share, share: share,
                                 details: ["Datei: \(job.name)", progressLine(fraction: job.fraction, fps: job.fps, speed: job.speed, eta: job.etaS),
                                           "Für das Funkhaus, auf der Media Engine"]))
         }
-        for job in m.queueJobs {
-            l.jobs.append(.init(id: job.leaseId ?? job.menuTitle, title: job.menuTitle, details: job.menuDetails))
+        for job in m.queueJobs.jobs {
+            l.jobs.append(.init(id: job.leaseId ?? job.menuTitle, title: job.menuTitle, share: job.menuShare, details: job.menuDetails))
         }
         l.results = m.results.isEmpty ? ["Noch keine Aufträge"]
             : m.results.map { "\($0.title): \(verdict($0.verdict))\($0.check.map { " (\($0))" } ?? "")" }
@@ -164,9 +170,10 @@ final class MenuMirror: ObservableObject {
             l.connectionWord = "Verbindung: verbunden"
         }
         if let reason = m.workerStopped {
-            // The full reason is in the log window and the log file.
-            let short = reason.count > 90 ? String(reason.prefix(89)) + "…" : reason
-            l.connection = "Encoder gestoppt: \(short)" + (m.workerNextStart.map { ", neuer Versuch \(time($0))" } ?? "")
+            l.connection = "Encoder gestoppt" + (m.workerNextStart.map { ", neuer Versuch \(time($0))" } ?? "")
+            // A line of its own, cut to the menu's width; the whole reason is its tooltip, in the
+            // log window and in the log file.
+            l.stopReason = reason
             l.connectionWord = "Verbindung: Encoder gestoppt"
         }
         if let seen = m.extensionSeen {

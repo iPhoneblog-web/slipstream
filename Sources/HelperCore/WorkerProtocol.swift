@@ -162,8 +162,11 @@ extension WorkerJob {
         default: doing = kind == "whisper" ? "Hört zu" : "Wandelt um"
         }
         let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? leaseId ?? "Auftrag"
-        return "\(doing): \(name) · \(Int((fraction ?? 0) * 100)) %"
+        return "\(doing): \(name)" + menuShare
     }
+
+    /// The end of `menuTitle`, " · 12 %", which the menu keeps when it cuts a long title.
+    public var menuShare: String { " · \(Int((fraction ?? 0) * 100)) %" }
 
     /// Its submenu: the file, the rung, fps, speed, time left and the slot.
     public var menuDetails: [String] {

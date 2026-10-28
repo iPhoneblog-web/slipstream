@@ -44,8 +44,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var refused: [WorkerEvent.Refusal] = []
     /// The worker's running jobs, one per lease, in the order they started (encode-queue v0.2.14:
     /// a job in each kind of slot); the menu shows a line with a submenu for each.
-    @Published private(set) var queueJobs: [WorkerJob] = []
-    var queueJob: WorkerJob? { queueJobs.first }
+    @Published private(set) var queueJobs = RunningJobs()
+    var queueJob: WorkerJob? { queueJobs.jobs.first }
     /// The queue's last word on this Mac's points (encode-queue v0.2.15); nil before it.
     @Published private(set) var points: WorkerEvent.Points?
     @Published private(set) var proresJob: JobStatus?
@@ -377,7 +377,7 @@ final class AppModel: ObservableObject {
         guard let current = worker, current.id == id, !current.isRunning else { return }
         log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
-        queueJobs = []
+        queueJobs.clear()
         connection = .down
         keepAwake(false)
         guard !quitting else { return }
@@ -393,21 +393,17 @@ final class AppModel: ObservableObject {
             lastAnswer = lastAnswerAt ?? (up ? Date() : lastAnswer)
             self.refused = refused
         case .job(let job):
-            if let i = queueJobs.firstIndex(where: { $0.leaseId == job.leaseId }) {
-                queueJobs[i] = job
-            } else {
-                queueJobs.append(job)
-            }
+            queueJobs.update(job)
             keepAwake(true)
         case .idle:
-            queueJobs = []
+            queueJobs.clear()
             keepAwake(proresJob != nil)
         case .log(let lease, let line):
             // Standard error is in the file already (WorkerProcess); a job's lines come here.
             if let lease { WorkerLog.write("\(lease): \(line)") }
             appendLog(line)
         case .result(let leaseId, let title, let verdict, let check):
-            if let leaseId { queueJobs.removeAll { $0.leaseId == leaseId } }
+            if let leaseId { queueJobs.end(lease: leaseId) }
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
         case .paused(let until):
             setPause(until, tellWorker: false)
@@ -468,6 +464,12 @@ final class AppModel: ObservableObject {
             markExtensionSeen(at)
         }
         if let until = pausedUntil, until <= Date() { setPause(nil, tellWorker: false) }
+        // A job that ends beside another sends no event of its own (RunningJobs).
+        var jobs = queueJobs
+        if jobs.expire() {
+            queueJobs = jobs
+            keepAwake(!jobs.isEmpty || proresJob != nil)
+        }
     }
 
     // MARK: - Bits
@@ -513,6 +515,37 @@ final class AppModel: ObservableObject {
             awake = nil
         }
     }
+
+    #if DEBUG
+    /// `-menuPreview YES`, Debug builds only: the menu with two jobs side by side, results and
+    /// points, to look at it beside a running Slipstream (AGENTS.md). Nothing starts (no loopback,
+    /// no worker), and the app group file and the counts stay the running Slipstream's.
+    func preview() {
+        // "Beenden" ends it at once: shutDown would remove the running Slipstream's loopback file.
+        quitting = true
+        let now = Date()
+        site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
+        extensionSeen = now.addingTimeInterval(-120)
+        let events = [
+            #"{"event":"connection","up":true}"#,
+            #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fraction":0.12,"fps":9.4,"speed":0.38,"eta_s":1260}"#,
+            #"{"event":"job","lease_id":"b","title":"Folge 12","kind":"whisper","slot":"high","phase":"encoding","fraction":0.57,"speed":31.2,"eta_s":40}"#,
+            #"{"event":"points","table":"v1","today":1240,"week":5310,"total":20450,"rank":1,"of":3}"#,
+        ]
+        for line in events {
+            if let event = WorkerEvent.parse(line) { handle(event) }
+        }
+        let path = "/Users/someone/Library/Application Support/Slipstream/worker/work/ls_01M61102GCZ50V2N2WVXTBDWGA/input-captions"
+        results = [
+            ResultLine(title: "one_143_Siri_Pro", verdict: "given_back", check: "preempted", at: now.addingTimeInterval(-300)),
+            ResultLine(title: "Untertitel #529", verdict: "rejected", check: "other: the captions' path \"\(path)\" cannot go into a filter",
+                       at: now.addingTimeInterval(-1500)),
+            ResultLine(title: "one_142_Watch_Ultra", verdict: "accepted", check: nil, at: now.addingTimeInterval(-2400)),
+            ResultLine(title: "ProRes: Interview_A.mov", verdict: "fertig", check: nil, at: now.addingTimeInterval(-4000)),
+        ]
+        finishedToday = 7
+    }
+    #endif
 
     // MARK: - Quit
 
