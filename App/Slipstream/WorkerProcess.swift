@@ -40,16 +40,11 @@ final class WorkerProcess: @unchecked Sendable {
     static func takes(_ flag: String) -> Bool { usage.map { WorkerFlags.supports(flag, usage: $0) } ?? false }
 
     private static let usage: String? = {
-        let p = Process()
-        p.executableURL = Paths.helper("encode-worker")
-        p.arguments = ["-h"]
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = out
-        guard (try? p.run()) != nil else { return nil }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        let start = Date()
+        let usage = WorkerFlags.usage(of: Paths.helper("encode-worker"))
+        // bin/check-launch waits for this line.
+        Log.notice(.worker, "worker usage read in \(Int(Date().timeIntervalSince(start) * 1000)) ms\(usage == nil ? ", no worker" : "")")
+        return usage
     }()
 
     static var isPresent: Bool { FileManager.default.isExecutableFile(atPath: Paths.helper("encode-worker").path) }

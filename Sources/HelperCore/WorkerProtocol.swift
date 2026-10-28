@@ -219,6 +219,26 @@ extension WorkerJob {
 /// Which flags the embedded worker takes, from its `-h` usage, so the app passes a newer flag
 /// only to a worker that knows it (an unknown flag stops a Go worker at start).
 public enum WorkerFlags {
+    /// The usage `executable -h` prints, nil when it does not start. It blocks the calling thread
+    /// until the worker exits and never runs the run loop: `Process.waitUntilExit` does, and in
+    /// 1.3.6 SwiftUI built the menu inside that wait, whose CPU picker read the `static let`
+    /// still being initialised, and libdispatch ended the app at every launch (docs/traps.md,
+    /// "A static that runs the run loop").
+    public static func usage(of executable: URL) -> String? {
+        let p = Process()
+        p.executableURL = executable
+        p.arguments = ["-h"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = out
+        let exited = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in exited.signal() }
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        exited.wait()
+        return String(decoding: data, as: UTF8.self)
+    }
+
     public static func supports(_ flag: String, usage: String) -> Bool {
         usage.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("-\(flag) ") || $0.trimmingCharacters(in: .whitespaces) == "-\(flag)" }
     }
