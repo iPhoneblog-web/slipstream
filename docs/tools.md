@@ -12,7 +12,7 @@ builds no tool of its own.
 The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `fc-list`,
 `whisper-cli`, `versions.txt` and `fonts/`, static, whisper.cpp with Metal. Its versions are
 encode-queue's, the same on the server's worker image and on the Mac: toolchain 3, from
-encode-queue `v0.2.7` on, embedded from `v0.2.15` (ffmpeg 9.0.2, libx265 4.3, libx264 core 165 r3222, libvmaf 3.2.1,
+encode-queue `v0.2.7` on, embedded from `v0.2.18` (ffmpeg 9.0.2, libx265 4.3, libx264 core 165 r3222, libvmaf 3.2.1,
 lame 3.100, whisper.cpp v1.9.5, libass 0.17.5). `versions.txt` names them, and About shows it.
 `bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to those
 lines.

@@ -142,6 +142,14 @@ struct MenuContent: View {
     let model: AppModel
     @ObservedObject var mirror: MenuMirror
     @AppStorage("threads") private var threads = AppModel.maxThreads
+    @AppStorage("efficiencyOnly") private var efficiencyOnly = false
+    @AppStorage("archiveOnEfficiency") private var archiveOnEfficiency = false
+
+    @ViewBuilder private func pauseButtons(_ mode: PauseMode) -> some View {
+        Button("30 Minuten") { model.pause(for: 30 * 60, mode: mode) }
+        Button("2 Stunden") { model.pause(for: 2 * 3600, mode: mode) }
+        Button("24 Stunden") { model.pause(for: 24 * 3600, mode: mode) }
+    }
 
     var body: some View {
         let l = mirror.lines
@@ -173,21 +181,46 @@ struct MenuContent: View {
             Divider()
             if let until = l.pausedUntil {
                 Button("Fortsetzen (Pause bis \(until))") { model.resume() }
+                if l.pauseAfterJob && l.queueJobRunning {
+                    Button("Laufenden Auftrag sofort anhalten") { model.pauseNow() }
+                }
             } else {
+                // Sofort pausieren stops the running job where it stands; Nach diesem Auftrag lets
+                // it finish (PauseMode; Thorsten, 2026-10-28).
                 Menu("Pause") {
-                    Button("30 Minuten") { model.pause(for: 30 * 60) }
-                    Button("2 Stunden") { model.pause(for: 2 * 3600) }
-                    Button("24 Stunden") { model.pause(for: 24 * 3600) }
+                    if l.queueJobRunning && AppModel.workerHasModes {
+                        Section("Sofort pausieren") { pauseButtons(.now) }
+                        Section("Nach diesem Auftrag") { pauseButtons(.afterJob) }
+                    } else {
+                        pauseButtons(.now)
+                    }
                 }
             }
-            Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
-                Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
-                    ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
+            Menu(l.cpu) {
+                // The core counts and, on Apple silicon, "Nur Effizienzkerne" (encode-queue v0.2.18).
+                Picker("CPU", selection: Binding(get: { efficiencyOnly ? CPUChoice.efficiencyTag : threads }, set: { v in
+                    if v == CPUChoice.efficiencyTag {
+                        efficiencyOnly = true
+                    } else {
+                        efficiencyOnly = false
+                        threads = v
+                    }
+                    model.limitsChanged()
+                })) {
+                    ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads, efficiencyCores: AppModel.efficiencyCores,
+                                              slowdown: AppModel.efficiencySlowdown)) { c in
                         Text(c.label).tag(c.threads)
                     }
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
+                if AppModel.efficiencyCores > 0 {
+                    Divider()
+                    Toggle("Archiv-Aufträge nur auf Effizienzkernen",
+                           isOn: Binding(get: { archiveOnEfficiency || efficiencyOnly }, set: { archiveOnEfficiency = $0; model.limitsChanged() }))
+                        .disabled(efficiencyOnly)
+                    Text(CPUChoice.efficiencyNote)
+                }
             }
             Button("Protokoll anzeigen …") { model.showLog() }
 
@@ -263,6 +296,8 @@ struct SettingsView: View {
     @AppStorage("gpu") private var gpu = true
     @AppStorage("jobs") private var jobs = 1
     @AppStorage("highSlots") private var highSlots = 1
+    @AppStorage("efficiencyOnly") private var efficiencyOnly = false
+    @AppStorage("archiveOnEfficiency") private var archiveOnEfficiency = false
     @State private var identity: PairingIdentity?
     /// The real state: the user can turn it off in System Settings → Allgemein → Anmeldeobjekte.
     /// nil until macOS answered, off the main thread (LoginItem).
@@ -292,6 +327,15 @@ struct SettingsView: View {
 
             Form {
                 Stepper("CPU-Threads: \(threads) von \(AppModel.maxThreads)", value: $threads, in: 1...AppModel.maxThreads)
+                if AppModel.efficiencyCores > 0 {
+                    let slower = AppModel.efficiencySlowdown.map { " (etwa \($0)× langsamer)" } ?? ""
+                    Toggle("Nur Effizienzkerne" + slower, isOn: $efficiencyOnly)
+                    Toggle("Archiv-Aufträge nur auf Effizienzkernen" + slower, isOn: $archiveOnEfficiency)
+                        .disabled(efficiencyOnly)
+                    Text(CPUChoice.efficiencyCaption(slowdown: AppModel.efficiencySlowdown))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Toggle("Whisper darf die GPU nutzen", isOn: $gpu)
                 Picker("Aufträge gleichzeitig", selection: $jobs) {
                     Text("1").tag(1)
@@ -339,6 +383,8 @@ struct SettingsView: View {
         .onChange(of: gpu) { model.limitsChanged() }
         .onChange(of: jobs) { model.limitsChanged() }
         .onChange(of: highSlots) { model.limitsChanged() }
+        .onChange(of: efficiencyOnly) { model.limitsChanged() }
+        .onChange(of: archiveOnEfficiency) { model.limitsChanged() }
         // The keychain and the login item answer off the main thread; the window never waits.
         .task { identity = try? await Task.detached { try await AppPairing { _ in }.identity() }.value }
         .task { loginItem = await LoginItem.isOn() }

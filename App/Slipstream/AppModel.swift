@@ -48,10 +48,18 @@ final class AppModel: ObservableObject {
     var queueJob: WorkerJob? { queueJobs.jobs.first }
     /// The queue's last word on this Mac's points (encode-queue v0.2.15); nil before it.
     @Published private(set) var points: WorkerEvent.Points?
+    /// The worker's word on the CPU limit in effect (encode-queue v0.2.17); nil before it, and
+    /// from a worker before v0.2.17, which says nothing: the menu shows the setting then.
+    @Published private(set) var workerLimits: WorkerEvent.Limits?
+    /// The CPU settings, for the menu's line until the worker answers them.
+    @Published private(set) var threadsSetting = 0
+    @Published private(set) var efficiencySetting = Efficiency.off
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
     @Published private(set) var finishedToday = 0
     @Published private(set) var pausedUntil: Date?
+    /// How the pause treats a running job (PauseMode); `.now` when not paused.
+    @Published private(set) var pauseMode = PauseMode.now
     @Published private(set) var logLines: [String] = []
     @Published private(set) var tools: [WorkerEvent.Tool] = []
     /// The whisper models the queue wants this Mac to hold, in the order the worker named them.
@@ -215,27 +223,53 @@ final class AppModel: ObservableObject {
 
     static let maxThreads = ProcessInfo.processInfo.activeProcessorCount
 
+    /// The Mac's performance and efficiency cores; 0, 0 with one kind (an Intel Mac).
+    static let coreLevels: (perf: Int, eff: Int) = {
+        func value(_ name: String) -> Int {
+            var n: Int32 = 0
+            var size = MemoryLayout<Int32>.size
+            return sysctlbyname(name, &n, &size, nil, 0) == 0 ? Int(n) : 0
+        }
+        guard value("hw.nperflevels") >= 2 else { return (0, 0) }
+        return (value("hw.perflevel0.logicalcpu"), value("hw.perflevel1.logicalcpu"))
+    }()
+    /// The embedded worker pauses after a job and runs jobs on the efficiency cores (encode-queue
+    /// v0.2.18; both came with its --efficiency flag). Without it the menu offers neither.
+    static let workerHasModes = WorkerProcess.takes("efficiency")
+    static var efficiencyCores: Int { workerHasModes ? coreLevels.eff : 0 }
+    /// "etwa 11× langsamer" beside the efficiency-core settings (CPUChoice.efficiencySlowdown).
+    static var efficiencySlowdown: Int? { CPUChoice.efficiencySlowdown(perf: coreLevels.perf, eff: coreLevels.eff) }
+
     var limits: WorkerProcess.Limits {
         let threads = defaults.integer(forKey: "threads")
         return WorkerProcess.Limits(threads: threads > 0 ? min(threads, Self.maxThreads) : Self.maxThreads,
                                     gpu: defaults.object(forKey: "gpu") as? Bool ?? true,
                                     jobs: max(1, defaults.integer(forKey: "jobs")),
-                                    highSlots: min(max(defaults.object(forKey: "highSlots") as? Int ?? 1, 0), 2))
+                                    highSlots: min(max(defaults.object(forKey: "highSlots") as? Int ?? 1, 0), 2),
+                                    efficiency: Self.efficiencyCores > 0
+                                        ? Efficiency(only: defaults.bool(forKey: "efficiencyOnly"), archive: defaults.bool(forKey: "archiveOnEfficiency"))
+                                        : .off)
     }
 
     func limitsChanged() {
         let l = limits
-        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots))
+        threadsSetting = l.threads
+        efficiencySetting = l.efficiency
+        note("limits: \(l.threads) threads, gpu \(l.gpu), \(l.jobs) jobs, \(l.highSlots) high-priority slots, efficiency cores \(l.efficiency.rawValue)")
+        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots, efficiency: l.efficiency))
     }
 
     // MARK: - Start
 
     func start() {
         setSite(SiteConfig.load(from: Paths.appGroup))
+        threadsSetting = limits.threads
+        efficiencySetting = limits.efficiency
         // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).
         if site == nil { showSetup() }
         askLoginItemOnce()
         pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
+        pauseMode = defaults.string(forKey: "pauseMode").flatMap(PauseMode.init(rawValue:)) ?? .now
         if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
             finishedToday = defaults.integer(forKey: "todayCount")
         }
@@ -324,7 +358,7 @@ final class AppModel: ObservableObject {
             workerStartedAt = Date()
             connection = .down
             note("worker started, pid \(worker.pid)")
-            if let until = pausedUntil { worker.send(.pause(until: until)) }
+            if let until = pausedUntil { worker.send(.pause(until: until, mode: pauseMode)) }
         } catch {
             connection = .down
             stopped("Der Worker startet nicht: \(error.localizedDescription)", ranFor: 0)
@@ -333,9 +367,10 @@ final class AppModel: ObservableObject {
 
     /// A line about the worker's life: the unified log (kept), the log file and the log window.
     private func note(_ line: String) {
+        appendLog("slipstream: " + line)
+        guard !previewing else { return } // the log file is the running Slipstream's
         log.notice("\(line, privacy: .public)")
         WorkerLog.write("slipstream: " + line)
-        appendLog("slipstream: " + line)
     }
 
     /// The worker is gone or did not start: say why in the menu and start it again later,
@@ -378,6 +413,7 @@ final class AppModel: ObservableObject {
         log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
         queueJobs.clear()
+        workerLimits = nil
         connection = .down
         keepAwake(false)
         guard !quitting else { return }
@@ -405,8 +441,8 @@ final class AppModel: ObservableObject {
         case .result(let leaseId, let title, let verdict, let check):
             if let leaseId { queueJobs.end(lease: leaseId) }
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
-        case .paused(let until):
-            setPause(until, tellWorker: false)
+        case .paused(let until, let mode):
+            setPause(until, mode: mode ?? .now, tellWorker: false)
         case .update(let latest):
             updateAvailable = latest
         case .tools(let tools):
@@ -419,6 +455,8 @@ final class AppModel: ObservableObject {
             }
         case .points(let p):
             points = p
+        case .limits(let l):
+            workerLimits = l
         }
     }
 
@@ -444,18 +482,34 @@ final class AppModel: ObservableObject {
 
     // MARK: - Pause
 
-    func pause(for seconds: TimeInterval) {
-        setPause(Date().addingTimeInterval(seconds), tellWorker: true)
+    func pause(for seconds: TimeInterval, mode: PauseMode) {
+        setPause(Date().addingTimeInterval(seconds), mode: mode, tellWorker: true)
+    }
+
+    /// "Sofort anhalten" during a pause after the job: the same pause, now.
+    func pauseNow() {
+        guard let until = pausedUntil else { return }
+        setPause(until, mode: .now, tellWorker: true)
     }
 
     func resume() {
-        setPause(nil, tellWorker: true)
+        setPause(nil, mode: .now, tellWorker: true)
     }
 
-    private func setPause(_ until: Date?, tellWorker: Bool) {
+    private func setPause(_ until: Date?, mode: PauseMode, tellWorker: Bool) {
+        let changed = until != pausedUntil || mode != pauseMode
         pausedUntil = until
-        defaults.set(until, forKey: "pausedUntil")
-        if tellWorker { worker?.send(until.map { .pause(until: $0) } ?? .resume) }
+        pauseMode = until == nil ? .now : mode
+        if !previewing { // the defaults are the running Slipstream's
+            defaults.set(until, forKey: "pausedUntil")
+            defaults.set(pauseMode.rawValue, forKey: "pauseMode")
+        }
+        guard tellWorker else { return }
+        // In the log file too (Thorsten, 2026-10-28: "Pause also wasn't working", and nothing
+        // said whether the menu's pause reached the worker).
+        if changed { note(until.map { "pause until \($0.formatted(date: .omitted, time: .shortened)), \(mode.rawValue)" } ?? "resume") }
+        if worker == nil, until != nil { note("no worker running: the pause waits for its start") }
+        worker?.send(until.map { .pause(until: $0, mode: mode) } ?? .resume)
     }
 
     private func tick() {
@@ -463,7 +517,7 @@ final class AppModel: ObservableObject {
         if let at = (try? FileManager.default.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date {
             markExtensionSeen(at)
         }
-        if let until = pausedUntil, until <= Date() { setPause(nil, tellWorker: false) }
+        if let until = pausedUntil, until <= Date() { setPause(nil, mode: .now, tellWorker: false) }
         // A job that ends beside another sends no event of its own (RunningJobs).
         var jobs = queueJobs
         if jobs.expire() {
@@ -523,14 +577,17 @@ final class AppModel: ObservableObject {
     func preview() {
         // "Beenden" ends it at once: shutDown would remove the running Slipstream's loopback file.
         quitting = true
+        previewing = true
         let now = Date()
         site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
+        threadsSetting = 3
         extensionSeen = now.addingTimeInterval(-120)
         let events = [
             #"{"event":"connection","up":true}"#,
             #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fraction":0.12,"fps":9.4,"speed":0.38,"eta_s":1260}"#,
             #"{"event":"job","lease_id":"b","title":"Folge 12","kind":"whisper","slot":"high","phase":"encoding","fraction":0.57,"speed":31.2,"eta_s":40}"#,
             #"{"event":"points","table":"v1","today":1240,"week":5310,"total":20450,"rank":1,"of":3}"#,
+            #"{"event":"limits","threads":3,"cores":12,"throttled":1}"#,
         ]
         for line in events {
             if let event = WorkerEvent.parse(line) { handle(event) }
@@ -544,8 +601,24 @@ final class AppModel: ObservableObject {
             ResultLine(title: "ProRes: Interview_A.mov", verdict: "fertig", check: nil, at: now.addingTimeInterval(-4000)),
         ]
         finishedToday = 7
+        // The first job's event once a second, as a running encode sends it, so the menu sees
+        // what it sees beside a real job: a pause clicked while the model changes.
+        var fraction = 0.12
+        guard UserDefaults.standard.object(forKey: "menuPreviewTicker") == nil || UserDefaults.standard.bool(forKey: "menuPreviewTicker") else { return }
+        timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            fraction = min(1, fraction + 0.001)
+            let line = #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fps":9.4,"speed":0.38,"eta_s":1260,"fraction":"#
+                + String(fraction) + "}"
+            Task { @MainActor in
+                if let event = WorkerEvent.parse(line) { self?.handle(event) }
+            }
+        })
     }
     #endif
+
+    /// The Debug menu preview (-menuPreview): nothing it does reaches the defaults or the log file,
+    /// which are the running Slipstream's.
+    private var previewing = false
 
     // MARK: - Quit
 

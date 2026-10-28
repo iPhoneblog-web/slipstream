@@ -42,10 +42,26 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   Aufträge dieses Macs wert sind, und sein Platz unter allen gekoppelten Encodern. Ein Punkt ist
   eine Minute Arbeit des Mac Studio; derselbe Auftrag bringt auf jedem Rechner gleich viele
   Punkte. Das Funkhaus rechnet sie aus; sie entscheiden nicht, wer welchen Auftrag bekommt.
-- **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
-  nur für Aufträge des Encoders, nie für ProRes.
-- **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
-  auch nach einem Neustart. Die genaue Zahl steht in den Einstellungen.
+- **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie, ihr Ende auch.
+  Ab dann nimmt der Mac keinen neuen Auftrag. Läuft gerade einer, gibt es zwei Wege:
+  „Sofort pausieren“ hält ihn an. Ein Archiv- oder Stufe-2-Auftrag bleibt dann beim Mac und läuft
+  nach der Pause dort weiter, wo er stand; ein Sofort- oder Stufe-1-Auftrag, auf den jemand
+  wartet, geht nach einer Minute an einen anderen Rechner. „Nach diesem Auftrag“ lässt ihn zu
+  Ende laufen. Das Menü zeigt „Pausiert bis 20:00“ (oder „Pause nach diesem Auftrag, bis 20:00“),
+  ein angehaltener Auftrag heißt „Angehalten: …“. Die Pause gilt nur für Aufträge des Encoders,
+  nie für ProRes.
+- **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne; die genaue Zahl steht in den
+  Einstellungen. Die Zeile zeigt, was gerade gilt, etwa „3 von 12 Kernen“. Neue Aufträge starten
+  mit der neuen Zahl. Ein laufender Auftrag, der mit mehr Kernen begann, läuft gedrosselt weiter:
+  er hält in jeder Zehntelsekunde so lange an, dass er im Mittel nur noch so viele Kerne braucht,
+  und verliert dabei nichts. Dann steht dort „(laufender Auftrag gedrosselt)“. Mehr Kerne heben
+  die Drossel sofort auf. Die Zahl gilt auch nach einem Neustart. **Nur Effizienzkerne** lässt
+  alle Aufträge nur auf den Effizienzkernen laufen, **Archiv-Aufträge nur auf Effizienzkernen**
+  nur die Archiv-Aufträge: die Leistungskerne bleiben frei für die Arbeit am Mac, auch für einen
+  laufenden Auftrag sofort. Das ist etwa 11-mal langsamer (gemessen am Mac Studio), und ein
+  solcher Auftrag läuft fast nur, wenn der Mac nichts anderes tut: macOS gibt ihm, was übrig
+  bleibt. Bei viel Arbeit am Mac bekam er in einer Minute kaum etwas (0,07 Kerne). Menü und
+  Einstellungen sagen beides dazu.
 - **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
   `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
 - **Verbindung: Encoder gestoppt** heißt: der Encoder-Teil von Slipstream läuft gerade nicht.
@@ -60,7 +76,7 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
   einem Update von Slipstream fragt Safari das neu).
 - **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
-  (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, ob Whisper die GPU
+  (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, nur Effizienzkerne, Archiv-Aufträge nur auf Effizienzkernen, ob Whisper die GPU
   nutzen darf, Aufträge gleichzeitig, die Plätze dazu für Sofort und Stufe 1, und die
   Whisper-Modelle: welche das Funkhaus will (auf jedem Mac small und large-v3-turbo, das eine
   Untertitel-Modell, rund 2,1 GB), ob sie laden oder bereit sind, wie schnell, wie viel Platz

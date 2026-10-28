@@ -34,6 +34,12 @@ final class MenuMirror: ObservableObject {
         var today = ""
         var points: String?
         var pausedUntil: String?
+        /// The pause lets the running job finish (PauseMode.afterJob).
+        var pauseAfterJob = false
+        /// A queue job runs, so the pause offers "Nach diesem Auftrag".
+        var queueJobRunning = false
+        /// "CPU für den Encoder: 3 von 12 Kernen", what is in effect (CPUChoice.menuTitle).
+        var cpu = ""
         /// The top level's word, "Verbindung: verbunden", and its submenu's lines.
         var connectionWord = ""
         var connection = ""
@@ -52,7 +58,7 @@ final class MenuMirror: ObservableObject {
                 out += job.details
             }
             out += results
-            out += [today, connectionWord, connection]
+            out += [today, cpu, connectionWord, connection]
             if let points { out.append(points) }
             if let stopReason { out.append(stopReason) }
             out += extensionLines
@@ -126,8 +132,8 @@ final class MenuMirror: ObservableObject {
     static func lines(_ m: AppModel) -> Lines {
         var l = Lines()
         l.configured = m.site != nil
-        if m.pausedUntil != nil {
-            l.state = "Pausiert"
+        if let until = m.pausedUntil {
+            l.state = PauseMode.stateLine(until: time(until), mode: m.pauseMode, jobsRunning: !m.queueJobs.jobs.isEmpty)
         } else if m.proresJob != nil || m.queueJob != nil {
             l.state = "Wandelt um"
         } else if m.workerStopped != nil {
@@ -154,6 +160,10 @@ final class MenuMirror: ObservableObject {
         l.today = "Heute fertig: \(m.finishedToday)"
         l.points = m.points?.line
         l.pausedUntil = m.pausedUntil.map(time)
+        l.pauseAfterJob = m.pausedUntil != nil && m.pauseMode == .afterJob
+        l.queueJobRunning = !m.queueJobs.jobs.isEmpty
+        l.cpu = CPUChoice.menuTitle(setting: m.threadsSetting > 0 ? m.threadsSetting : AppModel.maxThreads, cores: AppModel.maxThreads,
+                                    inEffect: m.workerLimits, efficiencyOnly: m.efficiencySetting == .all)
         let last = m.lastAnswer.map { ", letzte Antwort \(time($0))" } ?? ""
         switch m.connection {
         case .notPaired:

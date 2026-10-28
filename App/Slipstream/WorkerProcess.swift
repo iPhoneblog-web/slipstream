@@ -26,6 +26,7 @@ final class WorkerProcess: @unchecked Sendable {
         var gpu: Bool
         var jobs: Int
         var highSlots: Int
+        var efficiency: Efficiency
     }
 
     private let process = Process()
@@ -95,6 +96,10 @@ final class WorkerProcess: @unchecked Sendable {
         // v0.2.14 on: the high-priority slots beside the normal ones (docs/worker.md).
         if Self.takes("high-slots") {
             arguments += ["--high-slots", String(limits.highSlots)]
+        }
+        // v0.2.18 on: the jobs that run on the efficiency cores only (docs/worker.md).
+        if Self.takes("efficiency") {
+            arguments += ["--efficiency", limits.efficiency.rawValue]
         }
         process.arguments = arguments
         // The toolchain's fonts for libass and its fc-list first on PATH (docs/tools.md,

@@ -10,13 +10,32 @@ public enum WorkerEvent: Equatable, Sendable {
     case log(leaseId: String?, line: String)
     /// A job this worker ended; `leaseId` names the running job it ends.
     case result(leaseId: String?, title: String, verdict: String, check: String?)
-    case paused(until: Date?)
+    /// The pause the worker keeps; `mode` from encode-queue v0.2.18, nil before.
+    case paused(until: Date?, mode: PauseMode?)
     case update(latest: String)
     case tools([Tool])
     /// One whisper model the queue wants this Mac to hold, at each change of its state (v0.2.7).
     case model(Model)
     /// This Mac's points and its place today, when either changes (v0.2.15).
     case points(Points)
+    /// The CPU limit in effect, at the start, after each `limits` line and when a running job's
+    /// tool is held to it or freed (v0.2.17).
+    case limits(Limits)
+
+    /// The worker's word on the CPU limit (encode-queue v0.2.17): the threads a new tool starts
+    /// with, of the Mac's cores, and how many running jobs' tools are held to it now, having
+    /// started with more (a lowered limit reaches them as a duty cycle of SIGSTOP and SIGCONT).
+    public struct Limits: Codable, Equatable, Sendable {
+        public var threads: Int
+        public var cores: Int
+        public var throttled: Int
+        /// Which jobs run on the efficiency cores: off, all, archive (Efficiency).
+        public var efficiency: String?
+
+        public init(threads: Int, cores: Int, throttled: Int = 0, efficiency: String? = nil) {
+            (self.threads, self.cores, self.throttled, self.efficiency) = (threads, cores, throttled, efficiency)
+        }
+    }
 
     /// What the queue says this Mac's accepted jobs earned by its points table (encode-queue
     /// v0.2.15, "Punkte-Tabelle v1": one point is a minute of the Mac Studio's work), and its
@@ -114,7 +133,7 @@ public enum WorkerEvent: Equatable, Sendable {
             return .result(leaseId: object["lease_id"] as? String, title: object["title"] as? String ?? "",
                            verdict: object["verdict"] as? String ?? "", check: object["check"] as? String)
         case "paused":
-            return .paused(until: date("until"))
+            return .paused(until: date("until"), mode: (object["mode"] as? String).flatMap(PauseMode.init(rawValue:)))
         case "update":
             guard let latest = object["latest"] as? String else { return nil }
             return .update(latest: latest)
@@ -128,6 +147,10 @@ public enum WorkerEvent: Equatable, Sendable {
             guard let d = try? JSONSerialization.data(withJSONObject: object),
                   let points = try? JSONCoding.decoder.decode(Points.self, from: d), points.rank > 0, points.of > 0 else { return nil }
             return .points(points)
+        case "limits":
+            guard let d = try? JSONSerialization.data(withJSONObject: object),
+                  let limits = try? JSONCoding.decoder.decode(Limits.self, from: d), limits.threads > 0, limits.cores > 0 else { return nil }
+            return .limits(limits)
         default:
             return nil
         }
@@ -158,7 +181,7 @@ extension WorkerJob {
         case "downloading": doing = "Lädt"
         case "checking": doing = "Prüft"
         case "uploading": doing = "Sendet"
-        case "paused": doing = "Pausiert"
+        case "paused": doing = "Angehalten"
         default: doing = kind == "whisper" ? "Hört zu" : "Wandelt um"
         }
         let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? leaseId ?? "Auftrag"
@@ -216,26 +239,45 @@ public enum WorkerEnvironment {
     }
 }
 
+/// How the menu's pause treats a running job (encode-queue v0.2.18): `now` stops its tool at once,
+/// and the job goes on where it stood when the pause ends (an archive or stage 2 job; a Sofort or
+/// stage 1 job goes back to the queue after a minute, for another Mac); `afterJob` lets it finish.
+/// Either way the Mac takes no new job until the pause ends. A worker before v0.2.18 takes no mode
+/// and pauses as `now`.
+public enum PauseMode: String, Codable, Equatable, Sendable {
+    case now
+    case afterJob = "after_job"
+
+    /// The menu's first line while paused: "Pausiert bis 20:00", or "Pause nach diesem Auftrag,
+    /// bis 20:00" while a job still runs to its end.
+    public static func stateLine(until: String, mode: PauseMode, jobsRunning: Bool) -> String {
+        mode == .afterJob && jobsRunning ? "Pause nach diesem Auftrag, bis \(until)" : "Pausiert bis \(until)"
+    }
+}
+
 /// What the app writes to the worker's standard input, one JSON object per line, after the
 /// first line, which is the private key.
 public enum WorkerCommand: Equatable, Sendable {
-    case pause(until: Date)
+    case pause(until: Date, mode: PauseMode)
     case resume
     /// `jobs`: the normal slots, which take every job; `highSlots`: the high-priority slots on top,
     /// which take only Sofort and Stufe 1 (encode-queue v0.2.14; an older worker ignores them).
-    case limits(threads: Int, gpu: Bool, jobs: Int, highSlots: Int)
+    /// `efficiency`: which jobs run on the efficiency cores only (encode-queue v0.2.18; an older
+    /// worker ignores it).
+    case limits(threads: Int, gpu: Bool, jobs: Int, highSlots: Int, efficiency: Efficiency)
     /// Give every lease back (reason `quit`) and exit.
     case quit
 
     public var line: String {
         let object: [String: Any]
         switch self {
-        case .pause(let until):
-            object = ["cmd": "pause", "until": ISO8601DateFormatter().string(from: until)]
+        case .pause(let until, let mode):
+            object = ["cmd": "pause", "until": ISO8601DateFormatter().string(from: until), "mode": mode.rawValue]
         case .resume:
             object = ["cmd": "resume"]
-        case .limits(let threads, let gpu, let jobs, let highSlots):
-            object = ["cmd": "limits", "threads": threads, "gpu": gpu, "jobs": jobs, "high_slots": highSlots]
+        case .limits(let threads, let gpu, let jobs, let highSlots, let efficiency):
+            object = ["cmd": "limits", "threads": threads, "gpu": gpu, "jobs": jobs, "high_slots": highSlots,
+                      "efficiency": efficiency.rawValue]
         case .quit:
             object = ["cmd": "quit"]
         }
