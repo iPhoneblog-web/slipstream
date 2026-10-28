@@ -88,7 +88,7 @@ from their cores, as the worker does for the queue, whose ECT and lease holds co
 | event | fields | the menu shows |
 |---|---|---|
 | `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]`; when the tunnel goes up or down, and from v0.2.14 also when the last answer's minute changes | "Verbindung: verbunden" or "getrennt"; its submenu: the tunnel and the last answer, a job kind refused for a tool version |
-| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s`; about once a second per running job | a line per job, "Wandelt um: one_144_Hey_Siri · 12 %", with its details as a submenu; the first job's share in the icon |
+| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s`; about once a second per running job | a line per job, "Wandelt um: one_144_Hey_Siri · 12 %", with its details as a submenu; the first job's share, fps and time left beside the icon, as chosen (below) |
 | `idle` | | no job |
 | `result` | `lease_id`, `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | "Letzte Ereignisse", the last ten, newest first; the count today; it ends its lease's line |
 | `paused` | `until` or null, `mode` (`now`, `after_job`; v0.2.18) | the pause the queue knows: "Pausiert bis 20:00" |
@@ -103,6 +103,20 @@ from their cores, as the worker does for the queue, whose ECT and lease holds co
 its own `job` events, and sends `idle` only once none is left. A job that ends beside another
 sends no event of its own unless its result comes at once (one still being checked waits for
 its verdict), so the menu drops a job it has not heard of for 15 s (`HelperCore.RunningJobs`).
+
+**The menu bar's text** (Thorsten, 2026-10-28: "The 10% in the trayicon... not sure if that is
+usefull"). Beside the icon stands what "In der Menüleiste zeigen" (the menu, and Settings →
+Menüleiste) has checked, in a fixed order: Status ("Pause"), Fortschritt % (the first job's
+share), Restzeit, FPS, Kerne (busy of allowed, "3/12"), CPU % des Encoders and Punkte heute,
+separated by a dot in thin spaces, with monospaced digits (`HelperCore.MenuBarTitle`). An item
+without a value now is left out; nothing checked leaves the icon alone. The default is the
+progress, so an idle Mac shows the icon alone. The text changes at most once a second, and past
+150 pt whole items go from the end and "…" says so. Kerne and CPU % come from the app itself:
+once a second, while one of them is checked, it adds up the CPU time of the worker and every
+process below it (`HelperCore.ProcessCPU`, proc_pid_rusage), since the worker reports its busy
+threads to the queue only with each presence. The choice is the defaults key `menuBarItems`.
+[docs/menubar/](menubar/) has the item as the Debug preview draws it (`-menuPreview YES
+-menuBarItems progress,eta,fps -menuBarRender <file.png>`, and `-menuPreviewPaused YES`).
 
 Its standard error goes to the log, at the level of each slog line
 ([logging.md](logging.md), "The worker's lines").
