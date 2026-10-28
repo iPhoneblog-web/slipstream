@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "DropCore", targets: ["DropCore"]),
         .library(name: "HelperCore", targets: ["HelperCore"]),
         .executable(name: "slipstream-cli", targets: ["slipstream-cli"]),
+        .executable(name: "release-notes", targets: ["release-notes"]),
     ],
     targets: [
         // The ProRes intermediate: plan, transcoder, checks, messages.
@@ -19,6 +20,10 @@ let package = Package(
         // configuration, the worker's events.
         .target(name: "HelperCore", dependencies: ["DropCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(name: "slipstream-cli", dependencies: ["DropCore"],
+                          swiftSettings: [.swiftLanguageMode(.v5)]),
+        // A version's release notes for CI: checked, as HTML for the appcast, as Markdown for
+        // the GitHub release (docs/release.md).
+        .executableTarget(name: "release-notes", dependencies: ["HelperCore"],
                           swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "DropCoreTests", dependencies: ["DropCore"],
                     resources: [.copy("fixtures")],

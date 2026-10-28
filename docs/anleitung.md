@@ -30,6 +30,9 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 
 ## Das Menü
 
+- **Neu in 1.3.6 …** steht nach einem Update ganz oben im Menü, bis man es öffnet: ein Fenster
+  mit dem, was sich seit der zuletzt gesehenen Version geändert hat. Dasselbe für die laufende
+  Version steht unter **Über Slipstream**, und vor dem Update zeigt es schon Sparkles Fenster.
 - **Das Symbol** zeigt den Zustand: Wind (bereit oder wandelt um), Pause-Kreis (pausiert).
   Daneben steht, was unter **In der Menüleiste zeigen** (im Menü und in den Einstellungen,
   Tab „Menüleiste“) angehakt ist, in dieser Reihenfolge: Status („Pause“), Fortschritt %,

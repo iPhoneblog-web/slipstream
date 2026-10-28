@@ -89,6 +89,8 @@ Sources/DropCore/        the intermediate: Plan, Transcoder and its checks, Nami
 Sources/HelperCore/      the loopback endpoint (HTTP, routes), the ProRes jobs, the tunnel config and
                          WireGuard key, the worker's events and commands, the encode process
 Sources/slipstream-cli/  the encode as a process: the app runs it at nice 19; also for bin/test-encode
+Sources/release-notes/   a version's release notes for CI: checked, HTML for the appcast, Markdown
+release-notes/           each version's notes, German (docs/release.md, "Release notes")
 App/Slipstream/          the menu bar app: menu, settings, log, loopback listener, worker, keychain
 Extension/               the Safari web extension: native-messaging handler, content script, bridge
 Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made files (make.sh)

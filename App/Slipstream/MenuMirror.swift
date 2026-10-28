@@ -49,6 +49,8 @@ final class MenuMirror: ObservableObject {
         var update: String?
         /// "In der Menüleiste zeigen": the items checked.
         var menuBarItems = MenuBarItems.standard
+        /// "Neu in 1.3.6 …" after an update, until opened.
+        var newVersion: String?
 
         /// Every line the menu shows as text, in submenus too.
         var all: [String] {
@@ -233,6 +235,7 @@ final class MenuMirror: ObservableObject {
         l.refused = m.refused.map { "Keine \($0.kind)-Aufträge: \($0.reason)" }
         l.update = m.updateAvailable
         l.menuBarItems = m.menuBarItems
+        l.newVersion = m.newNotes.first?.version
         return l
     }
 

@@ -282,10 +282,36 @@ final class AppModel: ObservableObject {
 
     // MARK: - Start
 
+    // MARK: - Release notes
+
+    /// Every version's notes in the bundle, newest first (ReleaseNotes).
+    private(set) var releaseNotes: [ReleaseNotes] = []
+    /// What "Neu in …" shows at the top of the menu after an update, until it is opened.
+    @Published private(set) var newNotes: [ReleaseNotes] = []
+
+    /// Before askLoginItemOnce, which marks a Mac that ran Slipstream before.
+    private func loadReleaseNotes() {
+        releaseNotes = Paths.releaseNotes.map(ReleaseNotes.load(from:)) ?? []
+        newNotes = ReleaseNotes.new(in: releaseNotes, current: version, lastSeen: defaults.string(forKey: "notesSeenVersion"),
+                                    ranBefore: defaults.bool(forKey: "loginItemAsked"))
+        if newNotes.isEmpty { defaults.set(version, forKey: "notesSeenVersion") }
+    }
+
+    /// The notes since the last version seen, or this version's: "Neu in …" and its window.
+    func showWhatsNew() {
+        let notes = newNotes.isEmpty ? releaseNotes.filter { $0.version == version } : newNotes
+        windows.show("whatsnew", title: "Neu in Slipstream \(version)", size: NSSize(width: 480, height: 340), resizable: true) {
+            WhatsNewView(notes: notes)
+        }
+        newNotes = []
+        defaults.set(version, forKey: "notesSeenVersion")
+    }
+
     func start() {
         Log.notice(.app, "Slipstream \(version) started, pid \(getpid()), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         setSite(SiteConfig.load(from: Paths.appGroup))
         Log.info(.app, site.map { "site: \($0.host)" } ?? "no site set up yet")
+        loadReleaseNotes()
         threadsSetting = limits.threads
         efficiencySetting = limits.efficiency
         // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).

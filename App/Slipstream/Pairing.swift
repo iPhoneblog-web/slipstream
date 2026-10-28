@@ -48,6 +48,9 @@ enum Paths {
 
     static var toolVersionsFile: URL? { Bundle.main.url(forResource: "versions", withExtension: "txt") }
 
+    /// `Contents/Resources/release-notes`: each version's notes (bin/package, ReleaseNotes).
+    static var releaseNotes: URL? { Bundle.main.url(forResource: "release-notes", withExtension: nil) }
+
     /// whisper.cpp's release from it (`whisper.cpp v1.9.5`), for the worker, which looks for the
     /// file beside `whisper-cli` otherwise.
     static var whisperVersion: String? {
