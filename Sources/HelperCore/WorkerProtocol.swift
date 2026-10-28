@@ -8,7 +8,8 @@ public enum WorkerEvent: Equatable, Sendable {
     case job(WorkerJob)
     case idle
     case log(leaseId: String?, line: String)
-    case result(title: String, verdict: String, check: String?)
+    /// A job this worker ended; `leaseId` names the running job it ends.
+    case result(leaseId: String?, title: String, verdict: String, check: String?)
     case paused(until: Date?)
     case update(latest: String)
     case tools([Tool])
@@ -74,8 +75,8 @@ public enum WorkerEvent: Equatable, Sendable {
         case "log":
             return .log(leaseId: object["lease_id"] as? String, line: object["line"] as? String ?? "")
         case "result":
-            return .result(title: object["title"] as? String ?? "", verdict: object["verdict"] as? String ?? "",
-                           check: object["check"] as? String)
+            return .result(leaseId: object["lease_id"] as? String, title: object["title"] as? String ?? "",
+                           verdict: object["verdict"] as? String ?? "", check: object["check"] as? String)
         case "paused":
             return .paused(until: date("until"))
         case "update":
@@ -106,6 +107,46 @@ public struct WorkerJob: Codable, Equatable, Sendable {
     public var fps: Double?
     public var speed: Double?
     public var etaS: Int?
+}
+
+extension WorkerJob {
+    /// The menu's line for this job (Thorsten, 2026-10-28: "Use Sub-menues for details"): what it
+    /// does, its title and its share, "Wandelt um: one_144_Hey_Siri · 12 %".
+    public var menuTitle: String {
+        let doing: String
+        switch phase {
+        case "downloading": doing = "Lädt"
+        case "checking": doing = "Prüft"
+        case "uploading": doing = "Sendet"
+        case "paused": doing = "Pausiert"
+        default: doing = kind == "whisper" ? "Hört zu" : "Wandelt um"
+        }
+        let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? leaseId ?? "Auftrag"
+        return "\(doing): \(name) · \(Int((fraction ?? 0) * 100)) %"
+    }
+
+    /// Its submenu: the file, the rung, fps, speed, time left and the slot.
+    public var menuDetails: [String] {
+        var out: [String] = []
+        if let title, !title.isEmpty { out.append("Datei: \(title)") }
+        if kind == "whisper" {
+            out.append("Untertitel (Whisper)")
+        } else if let rung {
+            out.append("Stufe: \(rung)p")
+        }
+        if let fps { out.append("FPS: " + Self.de(fps, digits: fps < 10 ? 1 : 0)) }
+        if let speed { out.append("Tempo: " + Self.de(speed, digits: 1) + "× Echtzeit") }
+        if let etaS {
+            let rounded = etaS > 90 ? (etaS + 30) / 60 * 60 : etaS
+            out.append("Noch: " + Duration.seconds(rounded).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 2)))
+        }
+        if let slot { out.append(slot == "high" ? "Platz: Sofort und Stufe 1" : "Platz: Normal") }
+        return out
+    }
+
+    static func de(_ v: Double, digits: Int) -> String {
+        v.formatted(.number.precision(.fractionLength(digits)).locale(Locale(identifier: "de_DE")))
+    }
 }
 
 /// Which flags the embedded worker takes, from its `-h` usage, so the app passes a newer flag

@@ -42,7 +42,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var connection: Connection = .notPaired
     @Published private(set) var lastAnswer: Date?
     @Published private(set) var refused: [WorkerEvent.Refusal] = []
-    @Published private(set) var queueJob: WorkerJob?
+    /// The worker's running jobs, one per lease, in the order they started (encode-queue v0.2.14:
+    /// a job in each kind of slot); the menu shows a line with a submenu for each.
+    @Published private(set) var queueJobs: [WorkerJob] = []
+    var queueJob: WorkerJob? { queueJobs.first }
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
     @Published private(set) var finishedToday = 0
@@ -372,7 +375,7 @@ final class AppModel: ObservableObject {
         guard let current = worker, current.id == id, !current.isRunning else { return }
         log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
-        queueJob = nil
+        queueJobs = []
         connection = .down
         keepAwake(false)
         guard !quitting else { return }
@@ -388,16 +391,21 @@ final class AppModel: ObservableObject {
             lastAnswer = lastAnswerAt ?? (up ? Date() : lastAnswer)
             self.refused = refused
         case .job(let job):
-            queueJob = job
+            if let i = queueJobs.firstIndex(where: { $0.leaseId == job.leaseId }) {
+                queueJobs[i] = job
+            } else {
+                queueJobs.append(job)
+            }
             keepAwake(true)
         case .idle:
-            queueJob = nil
+            queueJobs = []
             keepAwake(proresJob != nil)
         case .log(let lease, let line):
             // Standard error is in the file already (WorkerProcess); a job's lines come here.
             if let lease { WorkerLog.write("\(lease): \(line)") }
             appendLog(line)
-        case .result(let title, let verdict, let check):
+        case .result(let leaseId, let title, let verdict, let check):
+            if let leaseId { queueJobs.removeAll { $0.leaseId == leaseId } }
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
         case .paused(let until):
             setPause(until, tellWorker: false)
@@ -462,7 +470,7 @@ final class AppModel: ObservableObject {
 
     private func addResult(_ line: ResultLine) {
         results.insert(line, at: 0)
-        results = Array(results.prefix(3))
+        results = Array(results.prefix(10))
         if line.verdict == "accepted" || line.verdict == "fertig" {
             if let day = defaults.object(forKey: "todayDate") as? Date, !Calendar.current.isDateInToday(day) {
                 finishedToday = 0

@@ -32,9 +32,12 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 
 - **Das Symbol** zeigt den Zustand: Wind (bereit), Wind mit Prozent (wandelt um), Pause-Kreis
   (pausiert).
-- **Was gerade läuft:** Titel, Stufe oder „Whisper“, Prozent, Bilder pro Sekunde, Tempo,
-  Restzeit. Eine ProRes-Umwandlung steht hier auch.
-- **Die letzten Ergebnisse** und wie viele heute fertig wurden.
+- **Was gerade läuft:** eine Zeile je Auftrag, etwa „Wandelt um: one_144_Hey_Siri · 12 %“. Ihr
+  Untermenü nennt Datei, Stufe oder „Untertitel (Whisper)“, Bilder pro Sekunde, Tempo, Restzeit
+  und den Platz („Normal“ oder „Sofort und Stufe 1“). Eine ProRes-Umwandlung steht hier auch.
+  Läuft nichts, steht hier „Bereit“.
+- **Letzte Ereignisse:** ein Untermenü mit den letzten zehn Ergebnissen, das neueste oben.
+  Darunter, wie viele heute fertig wurden.
 - **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
   nur für Aufträge des Encoders, nie für ProRes.
 - **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
@@ -44,9 +47,10 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 - **Encoder gestoppt: …** sagt, warum der Encoder-Teil von Slipstream gerade nicht läuft, und
   wann Slipstream ihn wieder startet (erst nach 10 Sekunden, bei wiederholtem Stopp seltener,
   höchstens alle 10 Minuten). ProRes für das Funkhaus geht trotzdem.
-- **Verbindung:** Tunnel verbunden oder getrennt. „Nicht gekoppelt (nur ProRes)“ ist normal auf
-  einem Mac, der nur ProRes umwandelt.
-- **Safari-Extension:** „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
+- **Verbindung: verbunden** oder getrennt. Das Untermenü zeigt den Tunnel mit der letzten Antwort
+  des Funkhauses, die Safari-Extension und Auftragsarten, die das Funkhaus diesem Mac nicht gibt.
+  „Nicht gekoppelt (nur ProRes)“ ist normal auf einem Mac, der nur ProRes umwandelt.
+- **Safari-Extension** (im Untermenü „Verbindung“): „verbunden“, sobald das Funkhaus in Safari Slipstream erreicht hat.
   Steht dort „noch nicht verbunden“, obwohl das Funkhaus offen ist: in Safari →
   Einstellungen → Erweiterungen → Slipstream das eingerichtete Funkhaus erlauben (nach
   einem Update von Slipstream fragt Safari das neu).

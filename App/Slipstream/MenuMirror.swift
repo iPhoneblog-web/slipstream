@@ -19,22 +19,35 @@ final class MenuMirror: ObservableObject {
         var configured = false
         var state = ""
         var problem: String?
-        var job: [String] = []
+        /// A running job's line and its submenu (Thorsten, 2026-10-28: "Use Sub-menues for
+        /// details").
+        struct Job: Equatable, Identifiable {
+            var id: String
+            var title: String
+            var details: [String]
+        }
+        var jobs: [Job] = []
+        /// "Letzte Ereignisse": the last ten results, newest first.
         var results: [String] = []
         var today = ""
         var pausedUntil: String?
+        /// The top level's word, "Verbindung: verbunden", and its submenu's lines.
+        var connectionWord = ""
         var connection = ""
         var extensionLines: [String] = []
         var refused: [String] = []
         var update: String?
 
-        /// Every line the menu shows as text.
+        /// Every line the menu shows as text, in submenus too.
         var all: [String] {
             var out = [state]
             if let problem { out.append(problem) }
-            out += job
+            for job in jobs {
+                out.append(job.title)
+                out += job.details
+            }
             out += results
-            out += [today, connection]
+            out += [today, connectionWord, connection]
             out += extensionLines
             out += refused
             return out
@@ -121,11 +134,12 @@ final class MenuMirror: ObservableObject {
         }
         l.problem = m.problem
         if let job = m.proresJob {
-            l.job += ["ProRes: \(job.name)", progressLine(fraction: job.fraction, fps: job.fps, speed: job.speed, eta: job.etaS)]
+            l.jobs.append(.init(id: "prores-\(job.uploadId)", title: "Wandelt um: ProRes \(job.name) · \(Int(job.fraction * 100)) %",
+                                details: ["Datei: \(job.name)", progressLine(fraction: job.fraction, fps: job.fps, speed: job.speed, eta: job.etaS),
+                                          "Für das Funkhaus, auf der Media Engine"]))
         }
-        if let job = m.queueJob {
-            l.job += [[job.title, job.kind == "whisper" ? "Whisper" : job.rung.map { "\($0)p" }].compactMap { $0 }.joined(separator: " · "),
-                      progressLine(fraction: job.fraction ?? 0, fps: job.fps, speed: job.speed, eta: job.etaS)]
+        for job in m.queueJobs {
+            l.jobs.append(.init(id: job.leaseId ?? job.menuTitle, title: job.menuTitle, details: job.menuDetails))
         }
         l.results = m.results.isEmpty ? ["Noch keine Aufträge"]
             : m.results.map { "\($0.title): \(verdict($0.verdict))\($0.check.map { " (\($0))" } ?? "")" }
@@ -133,15 +147,24 @@ final class MenuMirror: ObservableObject {
         l.pausedUntil = m.pausedUntil.map(time)
         let last = m.lastAnswer.map { ", letzte Antwort \(time($0))" } ?? ""
         switch m.connection {
-        case .notPaired: l.connection = "Nicht gekoppelt (nur ProRes)"
-        case .noWorker: l.connection = "Ohne Worker (nur ProRes)"
-        case .down: l.connection = "Tunnel getrennt" + last
-        case .up: l.connection = "Tunnel verbunden" + last
+        case .notPaired:
+            l.connection = "Nicht gekoppelt (nur ProRes)"
+            l.connectionWord = "Verbindung: nicht gekoppelt"
+        case .noWorker:
+            l.connection = "Ohne Worker (nur ProRes)"
+            l.connectionWord = "Verbindung: ohne Worker"
+        case .down:
+            l.connection = "Tunnel getrennt" + last
+            l.connectionWord = "Verbindung: getrennt"
+        case .up:
+            l.connection = "Tunnel verbunden" + last
+            l.connectionWord = "Verbindung: verbunden"
         }
         if let reason = m.workerStopped {
             // The full reason is in the log window and the log file.
             let short = reason.count > 90 ? String(reason.prefix(89)) + "…" : reason
             l.connection = "Encoder gestoppt: \(short)" + (m.workerNextStart.map { ", neuer Versuch \(time($0))" } ?? "")
+            l.connectionWord = "Verbindung: Encoder gestoppt"
         }
         if let seen = m.extensionSeen {
             l.extensionLines = ["Safari-Extension: verbunden, zuletzt \(time(seen))"]
