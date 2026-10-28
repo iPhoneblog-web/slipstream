@@ -3,7 +3,7 @@
 Slipstream carries the queue's worker, `encode-worker` from
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
 `Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.18`, toolchain 3; [tools.md](tools.md)). From
+toolchain beside it (`bin/fetch-worker`, `v0.2.20`, toolchain 3; [tools.md](tools.md)). From
 `v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
 queue, and a tool ended by a signal as `killed`.
 
