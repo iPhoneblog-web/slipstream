@@ -1,7 +1,6 @@
 import Foundation
 import HelperCore
 import Network
-import os
 
 /// The loopback endpoint on 127.0.0.1 and a free port (ADR-0007 §7). Network.framework carries
 /// the bytes; HelperCore parses and answers.
@@ -9,7 +8,6 @@ final class LoopbackServer: @unchecked Sendable {
     private let api: LoopbackAPI
     private let queue = DispatchQueue(label: "slipstream.loopback")
     private var listener: NWListener?
-    private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "loopback")
 
     init(api: LoopbackAPI) {
         self.api = api
@@ -22,8 +20,8 @@ final class LoopbackServer: @unchecked Sendable {
         parameters.acceptLocalOnly = true
         let listener = try NWListener(using: parameters)
         self.listener = listener
-        listener.newConnectionHandler = { [api, queue, log] connection in
-            HTTPConnection(connection: connection, api: api, queue: queue, log: log).start()
+        listener.newConnectionHandler = { [api, queue] connection in
+            HTTPConnection(connection: connection, api: api, queue: queue).start()
         }
         return try await withCheckedThrowingContinuation { continuation in
             let once = Once()
@@ -32,6 +30,7 @@ final class LoopbackServer: @unchecked Sendable {
                 case .ready:
                     once.run { continuation.resume(returning: Int(listener.port?.rawValue ?? 0)) }
                 case .failed(let error):
+                    Log.error(.extension, "loopback listener: \(error)")
                     once.run { continuation.resume(throwing: error) }
                 default:
                     break
@@ -64,18 +63,16 @@ private final class HTTPConnection: @unchecked Sendable {
     private let connection: NWConnection
     private let api: LoopbackAPI
     private let queue: DispatchQueue
-    private let log: Logger
     private var buffer = Data()
     /// `Expect: 100-continue` (curl sends it; Safari does not) is answered once per request.
     private var continued = false
     /// A 64 MiB slice and its headers.
     private static let maxBody = ProResJobs.maxSlice + 1024 * 1024
 
-    init(connection: NWConnection, api: LoopbackAPI, queue: DispatchQueue, log: Logger) {
+    init(connection: NWConnection, api: LoopbackAPI, queue: DispatchQueue) {
         self.connection = connection
         self.api = api
         self.queue = queue
-        self.log = log
     }
 
     func start() {
@@ -105,14 +102,19 @@ private final class HTTPConnection: @unchecked Sendable {
             }
             receive()
         case .failure(let status):
+            Log.warning(.extension, "a request the loopback cannot read: \(status)")
             send(HTTPResponse(status: status), keepAlive: false)
         case .request(let request, let consumed):
             buffer.removeSubrange(buffer.startIndex..<buffer.index(buffer.startIndex, offsetBy: consumed))
             continued = false
             Task { [self] in
                 let response = await api.handle(request)
+                // A refused request (wrong origin or token, a slice that does not fit) at notice
+                // level; the rest, a presence check a page or a slice a second, only in debug.
                 if response.status >= 400 {
-                    log.info("\(request.method, privacy: .public) \(request.path, privacy: .public): \(response.status)")
+                    Log.notice(.extension, "\(request.method) \(request.path): \(response.status)")
+                } else {
+                    Log.debug(.extension, "\(request.method) \(request.path): \(response.status)")
                 }
                 queue.async { self.send(response, keepAlive: true) }
             }

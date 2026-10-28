@@ -94,7 +94,7 @@ from their cores, as the worker does for the queue, whose ECT and lease holds co
 | `paused` | `until` or null, `mode` (`now`, `after_job`; v0.2.18) | the pause the queue knows: "Pausiert bis 20:00" |
 | `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
-| `log` | `lease_id`, `line` | "Protokoll anzeigen" |
+| `log` | `lease_id`, `line`, `level` (a slog level word; not sent up to v0.2.18, then info) | the log at that level ([logging.md](logging.md)) |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
 | `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
 | `limits` | `threads` (the limit in effect, the Mac's cores when unlimited), `cores`, `throttled` (how many running jobs are held to it), `efficiency` (v0.2.18); at the start, after each `limits` line and when a job is held or freed (encode-queue v0.2.17) | "CPU für den Encoder: 3 von 12 Kernen", or "3 von 12, gedrosselt" with "Laufender Auftrag gedrosselt" atop its submenu while `throttled` is above 0, or "nur Effizienzkerne"; the setting before the first event and with an older worker |
@@ -118,8 +118,8 @@ threads to the queue only with each presence. The choice is the defaults key `me
 [docs/menubar/](menubar/) has the item as the Debug preview draws it (`-menuPreview YES
 -menuBarItems progress,eta,fps -menuBarRender <file.png>`, and `-menuPreviewPaused YES`).
 
-Its standard error goes to the log window, to the unified log (info level, which macOS does not
-keep) and to `~/Library/Logs/Slipstream/worker.log`.
+Its standard error goes to the log, at the level of each slog line
+([logging.md](logging.md), "The worker's lines").
 
 ## When the worker stops
 
@@ -132,12 +132,9 @@ keep) and to `~/Library/Logs/Slipstream/worker.log`.
   doubling to at most 10 min while stops follow each other; a worker that ran 5 min or more
   starts the count again. A start that fails (the keychain, the process) counts as a stop and is
   tried again the same way. A new pairing starts at once and at the start of the count.
-- **The log file**, `~/Library/Logs/Slipstream/worker.log` (`WorkerLog`, `HelperCore.RotatingLog`):
-  every line of the worker's standard error and of a job's `log` events, and the app's own lines
-  ("slipstream: worker started, pid …", "slipstream: worker stopped after … s: …"), each with
-  the time. At 5 MB it moves to `worker.log.1`. The log window shows its path and "Im Finder
-  zeigen". The app's lines also go to the unified log at notice level, which macOS keeps:
-  `log show --last 1d --predicate 'subsystem == "io.github.kyrios.slipstream"'`.
+- **The log** ([logging.md](logging.md)) has the worker's lines and the app's about starting and
+  stopping it ("worker started, pid …", "worker stopped after …: …; stop 2 in a row, next start
+  in 20 s"), at notice and error level, which macOS keeps.
 
 encode-queue implements this contract from `v0.1.0` on (its `worker-control.yaml`). It sends
 `job` at every phase change and once a second. whisper.cpp's version comes with

@@ -86,6 +86,7 @@ enum KeyStore {
             return key
         }
         guard status == errSecItemNotFound else {
+            Log.error(.tunnel, "the WireGuard key in the keychain cannot be read: OSStatus \(status)")
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
         }
         let key = WireGuardKey.generate()
@@ -97,7 +98,11 @@ enum KeyStore {
                                   kSecAttrLabel as String: "Slipstream WireGuard",
                                   kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         let added = SecItemAdd(add as CFDictionary, nil)
-        guard added == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(added)) }
+        guard added == errSecSuccess else {
+            Log.error(.tunnel, "a new WireGuard key cannot go into the keychain: OSStatus \(added)")
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(added))
+        }
+        Log.notice(.tunnel, "made a new WireGuard key; the Mac needs pairing again")
         return key
     }
 }
@@ -124,10 +129,17 @@ struct AppPairing: Pairing {
 
     func setTunnel(_ config: TunnelConfig) async throws {
         do { _ = try KeyStore.loadOrCreate() } catch {
+            Log.error(.tunnel, "pairing: no key: \(error.localizedDescription)")
             throw JobError("not-paired", "Slipstream findet seinen Schlüssel nicht im Schlüsselbund.")
         }
-        try FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
-        try (config.configLine + "\n").write(to: Paths.tunnel, atomically: true, encoding: .utf8)
+        do {
+            try FileManager.default.createDirectory(at: Paths.support, withIntermediateDirectories: true)
+            try (config.configLine + "\n").write(to: Paths.tunnel, atomically: true, encoding: .utf8)
+        } catch {
+            Log.error(.tunnel, "pairing: the tunnel file cannot be written: \(error.localizedDescription)")
+            throw error
+        }
+        Log.notice(.tunnel, "paired: tunnel address \(config.address), endpoint \(config.endpoint); the worker starts again")
         await onTunnel(config)
     }
 }

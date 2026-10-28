@@ -2,7 +2,6 @@ import AppKit
 import SafariServices
 import Foundation
 import HelperCore
-import os
 
 /// The configured site's origin for the loopback, which reads it off the main thread.
 final class SiteBox: @unchecked Sendable {
@@ -73,7 +72,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var pausedUntil: Date?
     /// How the pause treats a running job (PauseMode); `.now` when not paused.
     @Published private(set) var pauseMode = PauseMode.now
-    @Published private(set) var logLines: [String] = []
     @Published private(set) var tools: [WorkerEvent.Tool] = []
     /// The whisper models the queue wants this Mac to hold, in the order the worker named them.
     @Published private(set) var models: [WorkerEvent.Model] = []
@@ -117,10 +115,10 @@ final class AppModel: ObservableObject {
     func open(_ url: URL) {
         do {
             let host = try ConnectLink.host(from: url)
-            log.notice("connect link: \(host, privacy: .public)")
+            Log.notice(.app, "connect link: \(host)")
             connectRequest = ConnectRequest(host: host)
         } catch {
-            log.notice("connect link refused: \(url.absoluteString, privacy: .public)")
+            Log.warning(.app, "connect link refused: \(url.absoluteString): \(error)")
             connectRequest = ConnectRequest(problem: (error as? ConnectLink.Problem)?.message ?? error.localizedDescription)
         }
         showSetup()
@@ -153,7 +151,7 @@ final class AppModel: ObservableObject {
             }
             data = body
         } catch {
-            log.info("setup: \(host, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            Log.warning(.app, "setup: \(host) does not answer: \(error.localizedDescription)")
             return .failure(SetupProblem(message: SiteConfig.unreachable(host, (error as? URLError)?.code)))
         }
         do {
@@ -168,10 +166,11 @@ final class AppModel: ObservableObject {
         do {
             try found.save(to: Paths.appGroup)
         } catch {
+            Log.error(.app, "site \(found.host) not saved: \(error.localizedDescription)")
             return error.localizedDescription
         }
         setSite(found)
-        log.info("site set up: \(found.host, privacy: .public)")
+        Log.notice(.app, "site set up: \(found.host), protocol \(found.protocol)")
         return nil
     }
 
@@ -221,7 +220,7 @@ final class AppModel: ObservableObject {
 
     func answerLoginItem(_ yes: Bool) {
         defaults.set(true, forKey: "loginItemAsked")
-        log.notice("login item: \(yes ? "yes" : "no", privacy: .public)")
+        Log.notice(.app, "login item: \(yes ? "yes" : "no")")
         Task { await LoginItem.set(yes) }
     }
 
@@ -232,20 +231,30 @@ final class AppModel: ObservableObject {
     }
 
     func showLog() {
-        windows.show("log", title: "Slipstream – Protokoll", size: NSSize(width: 720, height: 420), resizable: true) {
-            LogView(model: self)
+        windows.show("log", title: "Slipstream – Protokoll", size: NSSize(width: 960, height: 520), resizable: true) {
+            LogView()
         }
     }
 
     func markExtensionSeen(_ at: Date = Date()) {
         guard at >= startedAt else { return }
-        if extensionSeen.map({ at > $0 }) ?? true { extensionSeen = at }
+        guard extensionSeen.map({ at > $0 }) ?? true else { return }
+        // Once per start, and again after ten minutes without it: a presence check comes at
+        // every Funkhaus page Safari opens.
+        if let last = extensionSeen {
+            if at.timeIntervalSince(last) >= 600 {
+                Log.notice(.extension, "Safari extension connected again, \(WorkerEventLog.duration(at.timeIntervalSince(last))) after its last check")
+            }
+        } else {
+            Log.notice(.extension, "Safari extension connected")
+        }
+        extensionSeen = at
     }
 
     static let releases = URL(string: "https://github.com/kyrios/slipstream/releases/latest")!
 
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
-    private let log = Logger(subsystem: SlipstreamIDs.logSubsystem, category: "app")
+    private var eventLog = WorkerEventLog()
     private let defaults = UserDefaults.standard
     private var jobs: ProResJobs?
     private var server: LoopbackServer?
@@ -289,7 +298,7 @@ final class AppModel: ObservableObject {
         let l = limits
         threadsSetting = l.threads
         efficiencySetting = l.efficiency
-        note("limits: \(l.threads) threads, gpu \(l.gpu), \(l.jobs) jobs, \(l.highSlots) high-priority slots, efficiency cores \(l.efficiency.rawValue)")
+        Log.notice(.cores, "setting: \(l.threads) of \(Self.maxThreads) threads, gpu \(l.gpu), \(l.jobs) jobs, \(l.highSlots) high-priority slots, efficiency cores \(l.efficiency.rawValue)\(worker == nil ? "; no worker running" : "")")
         worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots, efficiency: l.efficiency))
     }
 
@@ -321,7 +330,9 @@ final class AppModel: ObservableObject {
     }
 
     func start() {
+        Log.notice(.app, "Slipstream \(version) started, pid \(getpid()), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         setSite(SiteConfig.load(from: Paths.appGroup))
+        Log.info(.app, site.map { "site: \($0.host)" } ?? "no site set up yet")
         loadReleaseNotes()
         threadsSetting = limits.threads
         efficiencySetting = limits.efficiency
@@ -330,6 +341,7 @@ final class AppModel: ObservableObject {
         askLoginItemOnce()
         pausedUntil = (defaults.object(forKey: "pausedUntil") as? Date).flatMap { $0 > Date() ? $0 : nil }
         pauseMode = defaults.string(forKey: "pauseMode").flatMap(PauseMode.init(rawValue:)) ?? .now
+        if let until = pausedUntil { Log.notice(.pause, "pause until \(Self.clock(until)), \(pauseMode.rawValue) (kept from the last run)") }
         if let day = defaults.object(forKey: "todayDate") as? Date, Calendar.current.isDateInToday(day) {
             finishedToday = defaults.integer(forKey: "todayCount")
         }
@@ -350,7 +362,7 @@ final class AppModel: ObservableObject {
                 await jobs.cleanUp()
                 try await startLoopback(jobs)
             } catch {
-                log.error("start: \(error.localizedDescription, privacy: .public)")
+                Log.fault(.extension, "the loopback for the Funkhaus does not start: \(error.localizedDescription)")
                 problem = "Der lokale Dienst für das Funkhaus startet nicht: \(error.localizedDescription)"
             }
         }
@@ -383,7 +395,7 @@ final class AppModel: ObservableObject {
         let file = Paths.appGroup.appendingPathComponent(SlipstreamIDs.loopbackFile)
         try JSONEncoder().encode(note).write(to: file, options: .atomic)
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-        log.info("loopback on 127.0.0.1:\(port)")
+        Log.notice(.extension, "loopback on 127.0.0.1:\(port)")
     }
 
     // MARK: - The worker
@@ -403,8 +415,16 @@ final class AppModel: ObservableObject {
         workerNextStart = nil
         // One worker per key: two workers on one WireGuard key fight over the tunnel.
         guard worker == nil, !quitting else { return }
-        guard AppPairing.storedTunnel() != nil else { connection = .notPaired; return }
-        guard WorkerProcess.isPresent else { connection = .noWorker; return }
+        guard AppPairing.storedTunnel() != nil else {
+            Log.notice(.tunnel, "not paired: no worker")
+            connection = .notPaired
+            return
+        }
+        guard WorkerProcess.isPresent else {
+            Log.warning(.worker, "this build carries no worker")
+            connection = .noWorker
+            return
+        }
         do {
             let key = try KeyStore.loadOrCreate()
             let box = WorkerBox()
@@ -417,6 +437,7 @@ final class AppModel: ObservableObject {
                 Task { @MainActor [weak self] in self?.workerExited(id: box.id, reason) }
             })
             box.id = worker.id
+            eventLog.reset()
             try worker.start(key: key, limits: limits, version: version)
             self.worker = worker
             workerStartedAt = Date()
@@ -429,12 +450,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// A line about the worker's life: the unified log (kept), the log file and the log window.
+    /// A line about the worker's life, at notice level, which the unified log keeps.
     private func note(_ line: String) {
-        appendLog("slipstream: " + line)
-        guard !previewing else { return } // the log file is the running Slipstream's
-        log.notice("\(line, privacy: .public)")
-        WorkerLog.write("slipstream: " + line)
+        Log.notice(.worker, line)
     }
 
     /// The worker is gone or did not start: say why in the menu and start it again later,
@@ -444,7 +462,7 @@ final class AppModel: ObservableObject {
         let delay = WorkerRestart.delay(afterStops: workerStops)
         workerStopped = reason
         workerNextStart = Date().addingTimeInterval(delay)
-        note("worker stopped after \(Int(seconds)) s: \(reason); stop \(workerStops) in a row, next start in \(Int(delay)) s")
+        Log.error(.worker, "worker stopped after \(WorkerEventLog.duration(seconds)): \(reason); stop \(workerStops) in a row, next start in \(WorkerEventLog.duration(delay))")
         pendingStart?.cancel()
         let item = DispatchWorkItem { [weak self] in
             guard let self, self.worker == nil, !self.quitting else { return }
@@ -474,8 +492,8 @@ final class AppModel: ObservableObject {
 
     private func workerExited(id: UUID?, _ reason: String) {
         guard let current = worker, current.id == id, !current.isRunning else { return }
-        log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
+        if quitting { note("worker ended at quit: \(reason)") }
         queueJobs.clear()
         workerLimits = nil
         connection = .down
@@ -485,6 +503,7 @@ final class AppModel: ObservableObject {
     }
 
     private func handle(_ event: WorkerEvent) {
+        for record in eventLog.lines(for: event) { Log.write(record) }
         // A worker that speaks runs: the menu stops saying why the last one stopped.
         if workerStopped != nil, !isLogLine(event) { workerStopped = nil }
         switch event {
@@ -498,15 +517,13 @@ final class AppModel: ObservableObject {
         case .idle:
             queueJobs.clear()
             keepAwake(proresJob != nil)
-        case .log(let lease, let line):
-            // Standard error is in the file already (WorkerProcess); a job's lines come here.
-            if let lease { WorkerLog.write("\(lease): \(line)") }
-            appendLog(line)
+        case .log:
+            break // logged above (WorkerEventLog)
         case .result(let leaseId, let title, let verdict, let check):
             if let leaseId { queueJobs.end(lease: leaseId) }
             addResult(ResultLine(title: title, verdict: verdict, check: check, at: Date()))
         case .paused(let until, let mode):
-            setPause(until, mode: mode ?? .now, tellWorker: false)
+            setPause(until, mode: mode ?? .now, source: nil)
         case .update(let latest):
             updateAvailable = latest
         case .tools(let tools):
@@ -526,7 +543,35 @@ final class AppModel: ObservableObject {
 
     // MARK: - ProRes
 
+    /// Each ProRes job's phase and tenth last logged, by upload id.
+    private var proresLogged: [String: (phase: JobStatus.Phase, tenth: Int)] = [:]
+
+    private func logProres(_ status: JobStatus) {
+        let id = "\(status.name) (\(status.uploadId))"
+        let tenth = min(10, Int((status.fraction * 10).rounded(.down)))
+        let before = proresLogged[status.uploadId]
+        let took = WorkerEventLog.duration(Date().timeIntervalSince(status.createdAt))
+        if before?.phase != status.phase {
+            switch status.phase {
+            case .ready:
+                Log.notice(.encode, "ProRes \(id): ready after \(took)" + (status.intermediate.map { ", \($0.width)×\($0.height) \($0.codec), \($0.size) bytes" } ?? ""))
+            case .failed:
+                Log.error(.encode, "ProRes \(id): failed after \(took): \(status.error.map { "\($0.code): \($0.message)" } ?? "no reason")")
+            case .receiving, .queued:
+                Log.info(.encode, "ProRes \(id): \(status.phase.rawValue), \(status.size) bytes")
+            case .encoding, .checking:
+                Log.notice(.encode, "ProRes \(id): \(status.phase.rawValue) after \(took)")
+            }
+        } else if status.phase == .encoding, tenth > (before?.tenth ?? 0) {
+            var text = "ProRes \(id): \(tenth * 10) %"
+            if let fps = status.fps { text += String(format: " (%.1f fps)", fps) }
+            Log.info(.encode, text)
+        }
+        proresLogged[status.uploadId] = status.phase == .ready || status.phase == .failed ? nil : (status.phase, tenth)
+    }
+
     private func proresChanged(_ status: JobStatus) {
+        logProres(status)
         switch status.phase {
         case .encoding, .checking:
             proresJob = status
@@ -547,20 +592,23 @@ final class AppModel: ObservableObject {
     // MARK: - Pause
 
     func pause(for seconds: TimeInterval, mode: PauseMode) {
-        setPause(Date().addingTimeInterval(seconds), mode: mode, tellWorker: true)
+        setPause(Date().addingTimeInterval(seconds), mode: mode, source: "menu")
     }
 
     /// "Sofort anhalten" during a pause after the job: the same pause, now.
     func pauseNow() {
         guard let until = pausedUntil else { return }
-        setPause(until, mode: .now, tellWorker: true)
+        setPause(until, mode: .now, source: "menu, stop the running job now")
     }
 
     func resume() {
-        setPause(nil, mode: .now, tellWorker: true)
+        setPause(nil, mode: .now, source: "menu")
     }
 
-    private func setPause(_ until: Date?, mode: PauseMode, tellWorker: Bool) {
+    /// `source`: who paused, for the log ("menu"); nil for the worker's own word, which is not
+    /// sent back to it.
+    private func setPause(_ until: Date?, mode: PauseMode, source: String?) {
+        let tellWorker = source != nil
         let changed = until != pausedUntil || mode != pauseMode
         pausedUntil = until
         pauseMode = until == nil ? .now : mode
@@ -570,9 +618,10 @@ final class AppModel: ObservableObject {
         }
         guard tellWorker else { return }
         // In the log file too (Thorsten, 2026-10-28: "Pause also wasn't working", and nothing
-        // said whether the menu's pause reached the worker).
-        if changed { note(until.map { "pause until \($0.formatted(date: .omitted, time: .shortened)), \(mode.rawValue)" } ?? "resume") }
-        if worker == nil, until != nil { note("no worker running: the pause waits for its start") }
+        // said whether the menu's pause reached the worker). The worker's answer is its own line
+        // (WorkerEventLog).
+        if changed { Log.notice(.pause, (until.map { "pause until \(Self.clock($0)), \(mode.rawValue)" } ?? "resume") + " (\(source!))") }
+        if worker == nil, until != nil { Log.notice(.pause, "no worker running: the pause waits for its start") }
         worker?.send(until.map { .pause(until: $0, mode: mode) } ?? .resume)
     }
 
@@ -591,7 +640,10 @@ final class AppModel: ObservableObject {
         if let at = (try? FileManager.default.attributesOfItem(atPath: marker.path))?[.modificationDate] as? Date {
             markExtensionSeen(at)
         }
-        if let until = pausedUntil, until <= Date() { setPause(nil, mode: .now, tellWorker: false) }
+        if let until = pausedUntil, until <= Date() {
+            Log.notice(.pause, "pause until \(Self.clock(until)) is over")
+            setPause(nil, mode: .now, source: nil)
+        }
         // A job that ends beside another sends no event of its own (RunningJobs).
         var jobs = queueJobs
         if jobs.expire() {
@@ -620,18 +672,15 @@ final class AppModel: ObservableObject {
         return false
     }
 
-    /// A menu line the menu cut (MenuLine), whole in the log window once.
+    /// A menu line the menu cut (MenuLine), whole in the log once.
     func logCutLine(_ line: String) {
         guard cutLogged.insert(line).inserted else { return }
-        appendLog("Menü: \(line)")
+        Log.info(.app, "menu line, whole: \(line)")
     }
 
     private var cutLogged: Set<String> = []
 
-    private func appendLog(_ line: String) {
-        logLines.append(line)
-        if logLines.count > 1000 { logLines.removeFirst(logLines.count - 1000) }
-    }
+    static func clock(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }
 
     /// The Mac stays awake while Slipstream holds a job (ADR-0007 §3).
     private func keepAwake(_ on: Bool) {
@@ -652,6 +701,7 @@ final class AppModel: ObservableObject {
         // "Beenden" ends it at once: shutDown would remove the running Slipstream's loopback file.
         quitting = true
         previewing = true
+        Log.mute()
         let now = Date()
         site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
         threadsSetting = 3
@@ -676,7 +726,7 @@ final class AppModel: ObservableObject {
         ]
         finishedToday = 7
         workerCores = 2.9
-        if UserDefaults.standard.bool(forKey: "menuPreviewPaused") { setPause(now.addingTimeInterval(2 * 3600), mode: .now, tellWorker: false) }
+        if UserDefaults.standard.bool(forKey: "menuPreviewPaused") { setPause(now.addingTimeInterval(2 * 3600), mode: .now, source: nil) }
         // The first job's event once a second, as a running encode sends it, so the menu sees
         // what it sees beside a real job: a pause clicked while the model changes.
         var fraction = 0.12
@@ -707,6 +757,7 @@ final class AppModel: ObservableObject {
     /// ProRes job stays on disk and starts again at the next launch.
     func shutDown() async {
         quitting = true
+        Log.notice(.app, "quit" + (queueJob != nil ? ": giving the queue job back" : "") + (proresJob != nil ? ": the ProRes job starts again at the next launch" : ""))
         server?.stop()
         try? FileManager.default.removeItem(at: Paths.appGroup.appendingPathComponent(SlipstreamIDs.loopbackFile))
         await worker?.quit(timeout: 15)
