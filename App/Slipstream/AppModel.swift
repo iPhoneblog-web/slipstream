@@ -48,6 +48,11 @@ final class AppModel: ObservableObject {
     var queueJob: WorkerJob? { queueJobs.jobs.first }
     /// The queue's last word on this Mac's points (encode-queue v0.2.15); nil before it.
     @Published private(set) var points: WorkerEvent.Points?
+    /// The worker's word on the CPU limit in effect (encode-queue v0.2.17); nil before it, and
+    /// from a worker before v0.2.17, which says nothing: the menu shows the setting then.
+    @Published private(set) var workerLimits: WorkerEvent.Limits?
+    /// The CPU setting, for the menu's line until the worker answers it.
+    @Published private(set) var threadsSetting = 0
     @Published private(set) var proresJob: JobStatus?
     @Published private(set) var results: [ResultLine] = []
     @Published private(set) var finishedToday = 0
@@ -225,6 +230,7 @@ final class AppModel: ObservableObject {
 
     func limitsChanged() {
         let l = limits
+        threadsSetting = l.threads
         worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots))
     }
 
@@ -232,6 +238,7 @@ final class AppModel: ObservableObject {
 
     func start() {
         setSite(SiteConfig.load(from: Paths.appGroup))
+        threadsSetting = limits.threads
         // No site, no working app: the first launch asks for one (docs/extension-protocol.md, 4).
         if site == nil { showSetup() }
         askLoginItemOnce()
@@ -378,6 +385,7 @@ final class AppModel: ObservableObject {
         log.error("worker exited: \(reason, privacy: .public)")
         worker = nil
         queueJobs.clear()
+        workerLimits = nil
         connection = .down
         keepAwake(false)
         guard !quitting else { return }
@@ -419,6 +427,8 @@ final class AppModel: ObservableObject {
             }
         case .points(let p):
             points = p
+        case .limits(let l):
+            workerLimits = l
         }
     }
 
@@ -525,12 +535,14 @@ final class AppModel: ObservableObject {
         quitting = true
         let now = Date()
         site = SiteConfig(host: "funkhaus.example.org", name: "Funkhaus", protocol: 1)
+        threadsSetting = 3
         extensionSeen = now.addingTimeInterval(-120)
         let events = [
             #"{"event":"connection","up":true}"#,
             #"{"event":"job","lease_id":"a","title":"one_144_Hey_Siri","kind":"rung","rung":"2160","slot":"normal","phase":"encoding","fraction":0.12,"fps":9.4,"speed":0.38,"eta_s":1260}"#,
             #"{"event":"job","lease_id":"b","title":"Folge 12","kind":"whisper","slot":"high","phase":"encoding","fraction":0.57,"speed":31.2,"eta_s":40}"#,
             #"{"event":"points","table":"v1","today":1240,"week":5310,"total":20450,"rank":1,"of":3}"#,
+            #"{"event":"limits","threads":3,"cores":12,"throttled":1}"#,
         ]
         for line in events {
             if let event = WorkerEvent.parse(line) { handle(event) }

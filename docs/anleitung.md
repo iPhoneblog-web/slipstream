@@ -44,8 +44,12 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   Punkte. Das Funkhaus rechnet sie aus; sie entscheiden nicht, wer welchen Auftrag bekommt.
 - **Pause:** 30 Minuten, 2 Stunden oder 24 Stunden; „Fortsetzen“ beendet sie. Die Pause gilt
   nur für Aufträge des Encoders, nie für ProRes.
-- **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne, sofort für den laufenden Auftrag und
-  auch nach einem Neustart. Die genaue Zahl steht in den Einstellungen.
+- **CPU für den Encoder:** Alle, ¾, ½ oder ¼ der Kerne; die genaue Zahl steht in den
+  Einstellungen. Die Zeile zeigt, was gerade gilt, etwa „3 von 12 Kernen“. Neue Aufträge starten
+  mit der neuen Zahl. Ein laufender Auftrag, der mit mehr Kernen begann, läuft gedrosselt weiter:
+  er hält in jeder Zehntelsekunde so lange an, dass er im Mittel nur noch so viele Kerne braucht,
+  und verliert dabei nichts. Dann steht dort „(laufender Auftrag gedrosselt)“. Mehr Kerne heben
+  die Drossel sofort auf. Die Zahl gilt auch nach einem Neustart.
 - **Protokoll anzeigen …**, wenn etwas komisch aussieht. Dieselben Zeilen und ältere stehen in
   `~/Library/Logs/Slipstream/worker.log` („Im Finder zeigen“ im Protokollfenster).
 - **Verbindung: Encoder gestoppt** heißt: der Encoder-Teil von Slipstream läuft gerade nicht.

@@ -34,6 +34,8 @@ final class MenuMirror: ObservableObject {
         var today = ""
         var points: String?
         var pausedUntil: String?
+        /// "CPU für den Encoder: 3 von 12 Kernen", what is in effect (CPUChoice.menuTitle).
+        var cpu = ""
         /// The top level's word, "Verbindung: verbunden", and its submenu's lines.
         var connectionWord = ""
         var connection = ""
@@ -52,7 +54,7 @@ final class MenuMirror: ObservableObject {
                 out += job.details
             }
             out += results
-            out += [today, connectionWord, connection]
+            out += [today, cpu, connectionWord, connection]
             if let points { out.append(points) }
             if let stopReason { out.append(stopReason) }
             out += extensionLines
@@ -154,6 +156,8 @@ final class MenuMirror: ObservableObject {
         l.today = "Heute fertig: \(m.finishedToday)"
         l.points = m.points?.line
         l.pausedUntil = m.pausedUntil.map(time)
+        l.cpu = CPUChoice.menuTitle(setting: m.threadsSetting > 0 ? m.threadsSetting : AppModel.maxThreads, cores: AppModel.maxThreads,
+                                    inEffect: m.workerLimits)
         let last = m.lastAnswer.map { ", letzte Antwort \(time($0))" } ?? ""
         switch m.connection {
         case .notPaired:

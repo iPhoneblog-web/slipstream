@@ -24,3 +24,13 @@ public struct CPUChoice: Equatable, Sendable, Identifiable {
         return out
     }
 }
+
+extension CPUChoice {
+    /// The menu's line for the CPU limit: what is in effect, the worker's word once it has said
+    /// it (encode-queue v0.2.17), else the setting; "(laufender Auftrag gedrosselt)" while a
+    /// running job's tool, started with more threads, is held to it.
+    public static func menuTitle(setting: Int, cores: Int, inEffect: WorkerEvent.Limits?) -> String {
+        let title = "CPU für den Encoder: \(inEffect?.threads ?? setting) von \(inEffect?.cores ?? cores) Kernen"
+        return (inEffect?.throttled ?? 0) > 0 ? title + " (laufender Auftrag gedrosselt)" : title
+    }
+}

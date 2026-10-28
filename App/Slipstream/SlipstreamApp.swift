@@ -180,7 +180,7 @@ struct MenuContent: View {
                     Button("24 Stunden") { model.pause(for: 24 * 3600) }
                 }
             }
-            Menu("CPU für den Encoder: \(threads) von \(AppModel.maxThreads) Kernen") {
+            Menu(l.cpu) {
                 Picker("CPU", selection: Binding(get: { threads }, set: { threads = $0; model.limitsChanged() })) {
                     ForEach(CPUChoice.options(cores: AppModel.maxThreads, current: threads)) { c in
                         Text(c.label).tag(c.threads)

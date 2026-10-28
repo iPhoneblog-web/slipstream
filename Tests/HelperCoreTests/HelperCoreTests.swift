@@ -137,6 +137,17 @@ final class CPUChoiceTests: XCTestCase {
         XCTAssertEqual(o.first { $0.threads == 7 }?.label, "Eigene (7)")
         XCTAssertEqual(CPUChoice.options(cores: 12, current: 99).count, 4)
     }
+
+    /// The menu says what is in effect (Thorsten, 2026-10-28: the setting said 3, the encode ran
+    /// 10 cores): the setting until the worker answers, then the worker's word, and that a running
+    /// job is held to it.
+    func testMenuTitle() {
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: nil), "CPU für den Encoder: 3 von 12 Kernen")
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: .init(threads: 12, cores: 12)),
+                       "CPU für den Encoder: 12 von 12 Kernen")
+        XCTAssertEqual(CPUChoice.menuTitle(setting: 3, cores: 12, inEffect: .init(threads: 3, cores: 12, throttled: 1)),
+                       "CPU für den Encoder: 3 von 12 Kernen (laufender Auftrag gedrosselt)")
+    }
 }
 
 final class MenuLineTests: XCTestCase {
@@ -247,6 +258,11 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual(p, .init(today: 1240.4, rank: 1, of: 3, week: 3000, total: 9000.5, table: "v1"))
         XCTAssertEqual(p.line, "1.240 Punkte heute · Platz 1 von 3")
         XCTAssertNil(WorkerEvent.parse(#"{"event":"points","today":5}"#)) // no place: no line
+        // encode-queue v0.2.17: the CPU limit in effect, and whether a running job is held to it.
+        XCTAssertEqual(WorkerEvent.parse(#"{"event":"limits","threads":3,"cores":12,"throttled":1}"#),
+                       .limits(.init(threads: 3, cores: 12, throttled: 1)))
+        XCTAssertNil(WorkerEvent.parse(#"{"event":"limits","threads":0,"cores":12,"throttled":0}"#))
+        XCTAssertNil(WorkerEvent.parse(#"{"event":"limits","cores":12}"#))
     }
 
     func testPointsLine() {

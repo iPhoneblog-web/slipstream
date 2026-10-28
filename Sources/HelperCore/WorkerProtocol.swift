@@ -17,6 +17,22 @@ public enum WorkerEvent: Equatable, Sendable {
     case model(Model)
     /// This Mac's points and its place today, when either changes (v0.2.15).
     case points(Points)
+    /// The CPU limit in effect, at the start, after each `limits` line and when a running job's
+    /// tool is held to it or freed (v0.2.17).
+    case limits(Limits)
+
+    /// The worker's word on the CPU limit (encode-queue v0.2.17): the threads a new tool starts
+    /// with, of the Mac's cores, and how many running jobs' tools are held to it now, having
+    /// started with more (a lowered limit reaches them as a duty cycle of SIGSTOP and SIGCONT).
+    public struct Limits: Codable, Equatable, Sendable {
+        public var threads: Int
+        public var cores: Int
+        public var throttled: Int
+
+        public init(threads: Int, cores: Int, throttled: Int = 0) {
+            (self.threads, self.cores, self.throttled) = (threads, cores, throttled)
+        }
+    }
 
     /// What the queue says this Mac's accepted jobs earned by its points table (encode-queue
     /// v0.2.15, "Punkte-Tabelle v1": one point is a minute of the Mac Studio's work), and its
@@ -128,6 +144,10 @@ public enum WorkerEvent: Equatable, Sendable {
             guard let d = try? JSONSerialization.data(withJSONObject: object),
                   let points = try? JSONCoding.decoder.decode(Points.self, from: d), points.rank > 0, points.of > 0 else { return nil }
             return .points(points)
+        case "limits":
+            guard let d = try? JSONSerialization.data(withJSONObject: object),
+                  let limits = try? JSONCoding.decoder.decode(Limits.self, from: d), limits.threads > 0, limits.cores > 0 else { return nil }
+            return .limits(limits)
         default:
             return nil
         }

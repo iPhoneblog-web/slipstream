@@ -38,7 +38,7 @@ After it, one JSON object per line:
 |---|---|
 | `{"cmd":"pause","until":"<RFC 3339>"}` | the menu's pause: suspend, give the job back after the queue's `pause_give_back_s`, claim nothing until then |
 | `{"cmd":"resume"}` | end the pause |
-| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N,"high_slots":N}` | the settings changed; a worker before v0.2.14 ignores `high_slots` |
+| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N,"high_slots":N}` | the settings changed, at once: the next tool starts with them, and from v0.2.17 a running tool that started with more threads is held to `threads` (below); a worker before v0.2.14 ignores `high_slots` |
 | `{"cmd":"quit"}` | give every lease back (reason `quit`) and exit; also on end of input |
 
 **Two kinds of slots** (encode-queue v0.2.14): Settings → Leistung, "Aufträge gleichzeitig"
@@ -46,6 +46,15 @@ After it, one JSON object per line:
 (`high_slots`, none, 1 or 2, default 1) are the high-priority slots on top, which take only jobs
 of those priorities, so a long archive job never keeps captions waiting. Beside other work the
 queue hands such a job out only while the Mac's free memory holds it.
+
+**The CPU limit holds for a running job too** (encode-queue v0.2.17; Thorsten, 2026-10-28: the
+setting said 3 of 12 cores while an archive encode, started with all 12, ran at 978 % for
+hours). x265's pool and whisper.cpp's threads are fixed when a tool starts, so a tool that uses
+clearly more cores than a lowered limit runs in a duty cycle: in each 100 ms it runs for a share
+and stands still (SIGSTOP and SIGCONT) for the rest, the share set from its measured CPU time,
+so it averages the limit's cores and loses no work. A higher limit frees it at once. The worker
+tells the queue the new limit at once too, so its estimates plan with it. encode-queue's README,
+"The CPU limit", has the measurements.
 
 **Standard output:** one JSON object per line, unknown events and fields ignored:
 
@@ -61,6 +70,7 @@ queue hands such a job out only while the Mac's free memory holds it.
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
 | `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
 | `points` | `table`, `today`, `week`, `total`, `rank`, `of` (encode-queue v0.2.15; when the points or the place change) | "1.240 Punkte heute · Platz 1 von 3" under "Heute fertig"; nothing before the first event |
+| `limits` | `threads` (the limit in effect, the Mac's cores when unlimited), `cores`, `throttled` (how many running jobs are held to it); at the start, after each `limits` line and when a job is held or freed (encode-queue v0.2.17) | "CPU für den Encoder: 3 von 12 Kernen", with "(laufender Auftrag gedrosselt)" while `throttled` is above 0; the setting before the first event and with an older worker |
 
 **Several jobs at once.** With two or more slots the worker runs jobs side by side, each with
 its own `job` events, and sends `idle` only once none is left. A job that ends beside another
