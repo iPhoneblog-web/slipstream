@@ -51,7 +51,7 @@ queue hands such a job out only while the Mac's free memory holds it.
 
 | event | fields | the menu shows |
 |---|---|---|
-| `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]` | tunnel up or down, the last answer, a job kind refused for a tool version |
+| `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]`; when the tunnel goes up or down, and from v0.2.14 also when the last answer's minute changes | tunnel up or down, the last answer, a job kind refused for a tool version |
 | `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s` | the current job, its share in the icon |
 | `idle` | | no job |
 | `result` | `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | the last three results, the count today |
@@ -59,7 +59,7 @@ queue hands such a job out only while the Mac's free memory holds it.
 | `update` | `latest` | "Update verfügbar", which asks Sparkle at once (release.md, "Updates") |
 | `tools` | `tools: [{name, version}]` | About |
 | `log` | `lease_id`, `line` | "Protokoll anzeigen" |
-| `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason` | Settings → Leistung, "Whisper-Modelle" |
+| `model` | `name`, `sha256`, `state` (`wanted`, `downloading`, `checking`, `calibrating`, `ready`, `failed`, `unavailable`), `bytes`, `bytes_done`, `speed`, `reason`; from encode-queue v0.2.14 the queue wants small and large-v3-turbo on every Mac with the RAM for it, fetched by the worker from the pinned Hugging Face revision and checked by sha256 | Settings → Leistung, "Whisper-Modelle" |
 
 Its standard error goes to the log window, to the unified log (info level, which macOS does not
 keep) and to `~/Library/Logs/Slipstream/worker.log`.

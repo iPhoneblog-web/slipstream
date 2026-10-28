@@ -119,6 +119,17 @@ struct MenuIcon: View {
     }
 }
 
+/// A line of the menu, cut to the menu's width (MenuLine); the whole text is its tooltip and, once
+/// cut, in the log window.
+struct Line: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(MenuLine.fit(text, measure: MenuMirror.measure)).help(text)
+    }
+}
+
 /// The menu: text from the mirror, which stands still while the menu is open; actions on the
 /// model.
 struct MenuContent: View {
@@ -134,16 +145,16 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
-            Text(l.state)
-            if let problem = l.problem { Text(problem) }
+            Line(l.state)
+            if let problem = l.problem { Line(problem) }
             if !l.job.isEmpty {
                 Divider()
-                ForEach(l.job, id: \.self) { Text($0) }
+                ForEach(l.job, id: \.self) { Line($0) }
             }
 
             Divider()
-            ForEach(l.results, id: \.self) { Text($0) }
-            Text(l.today)
+            ForEach(l.results, id: \.self) { Line($0) }
+            Line(l.today)
 
             Divider()
             if let until = l.pausedUntil {
@@ -167,9 +178,9 @@ struct MenuContent: View {
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
-            Text(l.connection)
-            ForEach(l.extensionLines, id: \.self) { Text($0) }
-            ForEach(l.refused, id: \.self) { Text($0) }
+            Line(l.connection)
+            ForEach(l.extensionLines, id: \.self) { Line($0) }
+            ForEach(l.refused, id: \.self) { Line($0) }
 
             Divider()
             Button("Funkhaus öffnen") { model.openSite() }

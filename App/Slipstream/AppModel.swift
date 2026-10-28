@@ -478,6 +478,14 @@ final class AppModel: ObservableObject {
         return false
     }
 
+    /// A menu line the menu cut (MenuLine), whole in the log window once.
+    func logCutLine(_ line: String) {
+        guard cutLogged.insert(line).inserted else { return }
+        appendLog("Menü: \(line)")
+    }
+
+    private var cutLogged: Set<String> = []
+
     private func appendLog(_ line: String) {
         logLines.append(line)
         if logLines.count > 1000 { logLines.removeFirst(logLines.count - 1000) }

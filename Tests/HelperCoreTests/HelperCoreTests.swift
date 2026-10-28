@@ -139,6 +139,34 @@ final class CPUChoiceTests: XCTestCase {
     }
 }
 
+final class MenuLineTests: XCTestCase {
+    /// 6 pt a character, about the menu font's average.
+    private func w(_ s: String) -> Double { Double(s.count) * 6 }
+
+    func testAShortLineStays() {
+        XCTAssertEqual(MenuLine.fit("Tunnel verbunden, letzte Antwort 13:51", measure: w), "Tunnel verbunden, letzte Antwort 13:51")
+    }
+
+    func testALongLineEndsInAnEllipsis() {
+        let long = String(repeating: "Ein langer Fehler ohne Pfad, ", count: 10)
+        let got = MenuLine.fit(long, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasSuffix("…"))
+        XCTAssertTrue(long.hasPrefix(String(got.dropLast())))
+        XCTAssertGreaterThan(w(got), MenuLine.width - 12) // as long as fits
+    }
+
+    // Alex's Vimes, 2026-10-28: the line that made the menu as wide as the screen.
+    func testAPathIsCutInTheMiddle() {
+        let line = #"Untertitel #529: fehlgeschlagen (other: the captions' path "/Users/alexolma/Library/Application Support/Slipstream/worker/work/ls_01M61102GCZ50V2N2WVXTBDWGA/input-captions" cannot go into a filter)"#
+        let got = MenuLine.fit(line, measure: w)
+        XCTAssertLessThanOrEqual(w(got), MenuLine.width)
+        XCTAssertTrue(got.hasPrefix("Untertitel #529: fehlgeschlagen"))
+        XCTAssertTrue(got.hasSuffix("cannot go into a filter)"))
+        XCTAssertEqual(got.filter { $0 == "…" }.count, 1)
+    }
+}
+
 final class WorkerProtocolTests: XCTestCase {
     func testEvents() {
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"connection","up":true,"refused":[{"kind":"rung","reason":"x265 4.0 statt 4.1"}]}"#),
