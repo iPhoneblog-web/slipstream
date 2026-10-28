@@ -25,6 +25,7 @@ final class WorkerProcess: @unchecked Sendable {
         var threads: Int
         var gpu: Bool
         var jobs: Int
+        var highSlots: Int
     }
 
     private let process = Process()
@@ -90,6 +91,10 @@ final class WorkerProcess: @unchecked Sendable {
         // allows no versions.txt beside ffmpeg (docs/tools.md, "Captions").
         if let file = Paths.toolVersionsFile, Self.takes("toolchain-versions") {
             arguments += ["--toolchain-versions", file.path]
+        }
+        // v0.2.14 on: the high-priority slots beside the normal ones (docs/worker.md).
+        if Self.takes("high-slots") {
+            arguments += ["--high-slots", String(limits.highSlots)]
         }
         process.arguments = arguments
         // The toolchain's fonts for libass and its fc-list first on PATH (docs/tools.md,

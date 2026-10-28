@@ -214,12 +214,13 @@ final class AppModel: ObservableObject {
         let threads = defaults.integer(forKey: "threads")
         return WorkerProcess.Limits(threads: threads > 0 ? min(threads, Self.maxThreads) : Self.maxThreads,
                                     gpu: defaults.object(forKey: "gpu") as? Bool ?? true,
-                                    jobs: max(1, defaults.integer(forKey: "jobs")))
+                                    jobs: max(1, defaults.integer(forKey: "jobs")),
+                                    highSlots: min(max(defaults.object(forKey: "highSlots") as? Int ?? 1, 0), 2))
     }
 
     func limitsChanged() {
         let l = limits
-        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs))
+        worker?.send(.limits(threads: l.threads, gpu: l.gpu, jobs: l.jobs, highSlots: l.highSlots))
     }
 
     // MARK: - Start

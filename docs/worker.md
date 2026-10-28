@@ -18,6 +18,7 @@ queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
 /usr/bin/nice -n 19 encode-worker --key-stdin --tunnel-file <support>/tunnel.conf
   --state-dir <support>/worker --name <Mac name> --host-app-name Slipstream --host-app-version <x.y.z>
   --threads N --gpu true|false --jobs N
+  --high-slots N   (only when the worker's -h lists it, v0.2.14 on)
   --ffmpeg <Helpers>/ffmpeg --ffprobe <Helpers>/ffprobe
   --whisper-cli <Helpers>/whisper-cli --whisper-models <support>/models --control stdio
   --whisper-version <from Resources/versions.txt>
@@ -37,15 +38,21 @@ After it, one JSON object per line:
 |---|---|
 | `{"cmd":"pause","until":"<RFC 3339>"}` | the menu's pause: suspend, give the job back after the queue's `pause_give_back_s`, claim nothing until then |
 | `{"cmd":"resume"}` | end the pause |
-| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N}` | the settings changed |
+| `{"cmd":"limits","threads":N,"gpu":bool,"jobs":N,"high_slots":N}` | the settings changed; a worker before v0.2.14 ignores `high_slots` |
 | `{"cmd":"quit"}` | give every lease back (reason `quit`) and exit; also on end of input |
+
+**Two kinds of slots** (encode-queue v0.2.14): Settings → Leistung, "Aufträge gleichzeitig"
+(`jobs`, 1 or 2) are the normal slots, which take every job; "Dazu für Sofort und Stufe 1"
+(`high_slots`, none, 1 or 2, default 1) are the high-priority slots on top, which take only jobs
+of those priorities, so a long archive job never keeps captions waiting. Beside other work the
+queue hands such a job out only while the Mac's free memory holds it.
 
 **Standard output:** one JSON object per line, unknown events and fields ignored:
 
 | event | fields | the menu shows |
 |---|---|---|
 | `connection` | `up`, `last_answer_at`, `refused: [{kind, reason}]` | tunnel up or down, the last answer, a job kind refused for a tool version |
-| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `phase`, `fraction`, `fps`, `speed`, `eta_s` | the current job, its share in the icon |
+| `job` | `lease_id`, `title`, `kind` (`rung`, `whisper`), `rung`, `slot` (`normal`, `high`; v0.2.14), `phase`, `fraction`, `fps`, `speed`, `eta_s` | the current job, its share in the icon |
 | `idle` | | no job |
 | `result` | `title`, `verdict` (`accepted`, `rejected`, `given_back`), `check` | the last three results, the count today |
 | `paused` | `until` or null | the pause the queue knows |

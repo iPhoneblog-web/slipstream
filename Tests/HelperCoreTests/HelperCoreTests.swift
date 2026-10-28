@@ -148,6 +148,11 @@ final class WorkerProtocolTests: XCTestCase {
         }
         XCTAssertEqual(job.rung, "2160")
         XCTAssertEqual(job.etaS, 600)
+        XCTAssertNil(job.slot) // a worker before encode-queue v0.2.14
+        guard case .job(let high) = WorkerEvent.parse(#"{"event":"job","lease_id":"l2","kind":"whisper","slot":"high","phase":"encoding"}"#) else {
+            return XCTFail()
+        }
+        XCTAssertEqual(high.slot, "high")
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"update","latest":"1.1.0"}"#), .update(latest: "1.1.0"))
         XCTAssertEqual(WorkerEvent.parse(#"{"event":"paused","until":null}"#), .paused(until: nil))
         XCTAssertNil(WorkerEvent.parse(#"{"event":"something-new"}"#))
@@ -167,8 +172,10 @@ final class WorkerProtocolTests: XCTestCase {
 
     func testCommands() {
         XCTAssertEqual(WorkerCommand.quit.line, "{\"cmd\":\"quit\"}\n")
-        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1).line,
-                       "{\"cmd\":\"limits\",\"gpu\":true,\"jobs\":1,\"threads\":8}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 8, gpu: true, jobs: 1, highSlots: 1).line,
+                       "{\"cmd\":\"limits\",\"gpu\":true,\"high_slots\":1,\"jobs\":1,\"threads\":8}\n")
+        XCTAssertEqual(WorkerCommand.limits(threads: 4, gpu: false, jobs: 2, highSlots: 0).line,
+                       "{\"cmd\":\"limits\",\"gpu\":false,\"high_slots\":0,\"jobs\":2,\"threads\":4}\n")
         XCTAssertEqual(WorkerCommand.pause(until: Date(timeIntervalSince1970: 0)).line,
                        "{\"cmd\":\"pause\",\"until\":\"1970-01-01T00:00:00Z\"}\n")
     }
@@ -195,6 +202,10 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertTrue(WorkerFlags.supports("whisper-version", usage: v027))
         // A word in a description is no flag.
         XCTAssertFalse(WorkerFlags.supports("versions", usage: v028))
+        // encode-queue v0.2.14 takes --high-slots; v0.2.13 would stop at it.
+        let v0214 = v028 + "  -high-slots int\n    \thigh-priority slots on top, for jobs of priority now and stage1 only; 0 none (EQ_HIGH_PRIORITY_SLOTS) (default 1)\n"
+        XCTAssertFalse(WorkerFlags.supports("high-slots", usage: v028))
+        XCTAssertTrue(WorkerFlags.supports("high-slots", usage: v0214))
     }
 
     func testLineBuffer() {
