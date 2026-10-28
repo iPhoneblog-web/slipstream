@@ -27,7 +27,8 @@ final class MenuWidthTests: XCTestCase {
             "Keine Verbindung zum Encoder", "Encoder gestoppt, neuer Versuch 20:01", "Verbindung: Encoder gestoppt",
             "Tunnel verbunden, letzte Antwort 20:01", "Nicht gekoppelt (nur ProRes)",
             WorkerEvent.Points(today: 123_456, rank: 10, of: 12).line,
-        ] + CPUChoice.efficiencyNoteLines
+            "In der Menüleiste zeigen", "Neu in 1.3.10 …",
+        ] + CPUChoice.efficiencyNoteLines + MenuBarItem.allCases.map(\.label)
         for line in lines {
             XCTAssertLessThanOrEqual(measure(line), MenuLine.width, line)
         }
