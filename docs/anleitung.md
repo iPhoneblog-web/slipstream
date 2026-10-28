@@ -30,8 +30,16 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
 
 ## Das Menü
 
-- **Das Symbol** zeigt den Zustand: Wind (bereit), Wind mit Prozent (wandelt um), Pause-Kreis
-  (pausiert).
+- **Neu in 1.3.6 …** steht nach einem Update ganz oben im Menü, bis man es öffnet: ein Fenster
+  mit dem, was sich seit der zuletzt gesehenen Version geändert hat. Dasselbe für die laufende
+  Version steht unter **Über Slipstream**, und vor dem Update zeigt es schon Sparkles Fenster.
+- **Das Symbol** zeigt den Zustand: Wind (bereit oder wandelt um), Pause-Kreis (pausiert).
+  Daneben steht, was unter **In der Menüleiste zeigen** (im Menü und in den Einstellungen,
+  Tab „Menüleiste“) angehakt ist, in dieser Reihenfolge: Status („Pause“), Fortschritt %,
+  Restzeit, FPS, Kerne (genutzt/erlaubt, etwa „3/12“), CPU % des Encoders und Punkte heute.
+  Was gerade keinen Wert hat, fehlt; ohne Haken steht nur das Symbol da. Von Haus aus ist nur
+  der Fortschritt angehakt: beim Umwandeln steht dort „47 %“, sonst nur das Symbol. Die Werte
+  ändern sich höchstens einmal pro Sekunde; ist der Text zu lang, endet er mit „…“.
 - **Was gerade läuft:** eine Zeile je Auftrag, etwa „Wandelt um: one_144_Hey_Siri · 12 %“. Ihr
   Untermenü nennt Datei, Stufe oder „Untertitel (Whisper)“, Bilder pro Sekunde, Tempo, Restzeit
   und den Platz („Normal“ oder „Sofort und Stufe 1“). Eine ProRes-Umwandlung steht hier auch.
@@ -78,12 +86,13 @@ Installieren und das Funkhaus einrichten: [README, „Install“](../README.md#i
   nichts, in Safari → Einstellungen → Erweiterungen „Slipstream“ anhaken und das Funkhaus
   erlauben. „Safari-Erweiterungen öffnen …“ öffnet diese Einstellungen gleich bei Slipstream.
   Nach einem Update von Slipstream fragt Safari das neu.
-- **Einstellungen …:** ein Fenster mit vier Tabs, in der Größe veränderbar: **Allgemein**
+- **Einstellungen …:** ein Fenster mit fünf Tabs, in der Größe veränderbar: **Allgemein**
   (Bei der Anmeldung starten, Version, Lizenzen), **Leistung** (CPU-Threads, nur Effizienzkerne, Archiv-Aufträge nur auf Effizienzkernen, ob Whisper die GPU
   nutzen darf, Aufträge gleichzeitig, die Plätze dazu für Sofort und Stufe 1, und die
   Whisper-Modelle: welche das Funkhaus will (auf jedem Mac small und large-v3-turbo, das eine
   Untertitel-Modell, rund 2,1 GB), ob sie laden oder bereit sind, wie schnell, wie viel Platz
-  sie belegen), **Funkhaus** (welches, und ein anderes einrichten),
+  sie belegen), **Funkhaus** (welches, und ein anderes einrichten), **Menüleiste** (was neben
+  dem Symbol steht),
   **Kopplung** (Name, öffentlicher Schlüssel, Tunnel).
 - **Lange Zeilen** kürzt das Menü mit „…“, damit es nicht breiter als etwa 330 Punkt wird, so
   breit wie die Zeile „CPU für den Encoder: 12 von 12 Kernen“; ein Pfad

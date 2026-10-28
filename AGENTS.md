@@ -41,6 +41,9 @@ git -C <any checkout> worktree add ~/worktrees/slipstream/<topic> -b <topic> ori
 
 - **Every change is a pull request onto `main`.** Squash only, so one pull request is one commit.
   Never push to `main`.
+- **A release has its notes**, `release-notes/<version>.md` (German, a few bullets for the people
+  who use it), merged before the tag; CI fails a tag without them ([docs/release.md](docs/release.md),
+  "Release notes").
 - **A release is a tag `v<major>.<minor>.<patch>`** on `main`, pushed after the merge:
   `git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1`. CI builds,
   signs, notarises and publishes it; never upload a build from a Mac by hand. `bin/package`
@@ -79,10 +82,12 @@ says why; where a number cost a measurement, the message keeps the measurement.
 - **Beside a running Slipstream, look at the menu** in a Debug build started with
   `-menuPreview YES`: two sample jobs, the first sending its event once a second as a running
   encode does (`-menuPreviewTicker NO` stops that), results and points; it starts nothing and
-  leaves the app group file, the defaults and the log file alone. `-menuPreviewNoExtension YES`
-  shows the menu before Safari reached the app. `-menuRender <file.png>` (with
-  `-menuRenderSubmenu <title>` for one submenu) draws the open menu's items at its real width and
-  quits, since this Mac's shell may not record the screen. Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
+  leaves the app group file, the defaults and the log file alone. `-menuBarItems a,b` picks the
+  menu bar's items, `-menuPreviewPaused YES` pauses it, and `-menuBarRender <file.png>` draws the
+  menu bar's item to a file and quits. `-menuPreviewNoExtension YES` shows the menu before Safari
+  reached the app, and `-menuRender <file.png>` (with `-menuRenderSubmenu <title>` for one
+  submenu) draws the open menu's items at its real width and quits: this Mac's shell may not
+  record the screen. Delete `Contents/PlugIns` from a copy first, so Safari keeps the running
   app's extension.
 
 Say in the pull request which tests cover the change and what is still untested; the menu and

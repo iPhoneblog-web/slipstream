@@ -62,6 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "menuPreview") {
             model.preview()
+            // `-menuBarRender <file.png>`: the menu bar's icon and text as the preview shows them, in
+            // light and dark, for a pull request; then quit.
+            if let path = UserDefaults.standard.string(forKey: "menuBarRender") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    renderMenuBar(to: URL(fileURLWithPath: path))
+                    NSApp.terminate(nil)
+                }
+            }
             // `-menuRender <file.png>`: the open menu as the app draws it, for a pull request
             // (this Mac's shell may not record the screen); `-menuRenderSubmenu <title>` opens
             // that submenu instead.
@@ -115,6 +123,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 #if DEBUG
 extension AppDelegate {
+    /// The menu bar's item, light above dark, at twice the size, as ImageRenderer draws MenuIcon.
+    func renderMenuBar(to url: URL) {
+        let strip = { (scheme: ColorScheme) in
+            MenuIcon(mirror: self.mirror)
+                .font(.system(size: NSFont.systemFontSize))
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(scheme == .dark ? Color(white: 0.16) : Color(white: 0.93))
+                .environment(\.colorScheme, scheme)
+                .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+        }
+        let r = ImageRenderer(content: VStack(alignment: .leading, spacing: 0) { strip(.light); strip(.dark) })
+        r.scale = 2
+        if let image = r.nsImage, let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: url)
+        }
+    }
+
     /// Opens the status item's menu (or one of its submenus, alone), draws the menu's window into
     /// `url` while it is open, and closes it.
     func renderMenu(to url: URL, submenu: String?) {
@@ -188,23 +214,24 @@ extension AppDelegate {
 }
 #endif
 
-/// The state in the icon itself: idle, encoding with its share, paused, no connection.
+/// The state in the icon itself (idle or encoding, paused, no connection), and beside it what the
+/// user chose to see there (MenuBarTitle; Einstellungen → Menüleiste).
 struct MenuIcon: View {
     @ObservedObject var mirror: MenuMirror
 
     var body: some View {
-        switch mirror.icon {
-        case .paused:
-            Image(systemName: "pause.circle")
-        case .progress(let percent):
-            HStack(spacing: 2) {
+        HStack(spacing: 2) {
+            switch mirror.icon {
+            case .paused:
+                Image(systemName: "pause.circle")
+            case .down:
+                Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
+            case .idle, .busy:
                 Image(systemName: "wind")
-                Text("\(percent) %").monospacedDigit()
             }
-        case .down:
-            Image(systemName: "wind.snow").symbolRenderingMode(.hierarchical)
-        case .idle:
-            Image(systemName: "wind")
+            if !mirror.title.isEmpty {
+                Text(mirror.title).monospacedDigit()
+            }
         }
     }
 }
@@ -247,6 +274,11 @@ struct MenuContent: View {
             Divider()
             Button("Beenden") { NSApp.terminate(nil) }
         } else {
+            // After an update, once: what is new (release-notes/, Thorsten 2026-10-28).
+            if let version = l.newVersion {
+                Button("Neu in \(version) …") { model.showWhatsNew() }
+                Divider()
+            }
             // One short line per thing; the details in submenus (Thorsten, 2026-10-28).
             if l.jobs.isEmpty || l.pausedUntil != nil { Line(l.state) }
             if let problem = l.problem { Line(problem) }
@@ -314,6 +346,11 @@ struct MenuContent: View {
                     ForEach(CPUChoice.efficiencyNoteLines, id: \.self) { Line($0) }
                 }
             }
+            Menu("In der Menüleiste zeigen") {
+                ForEach(MenuBarItem.allCases) { item in
+                    Toggle(item.label, isOn: Binding(get: { l.menuBarItems.items.contains(item) }, set: { model.setMenuBarItem(item, $0) }))
+                }
+            }
             Button("Protokoll anzeigen …") { model.showLog() }
 
             Divider()
@@ -357,6 +394,12 @@ enum About {
     @MainActor
     static func show(_ model: AppModel) {
         var lines: [String] = []
+        // Was ist neu: this version's notes above the tools (release-notes/).
+        if let notes = model.releaseNotes.first(where: { $0.version == model.version }) {
+            lines.append("Was ist neu in \(notes.version):")
+            lines.append(contentsOf: notes.plain)
+            lines.append("")
+        }
         let tools = model.tools.isEmpty ? bundledTools() : model.tools.map { "\($0.name) \($0.version)" }
         lines.append(contentsOf: tools)
         if let latest = model.updateAvailable { lines.append("Update verfügbar: \(latest)") }
@@ -390,6 +433,29 @@ enum About {
             return ["Ohne Worker und Werkzeuge"]
         }
         return text.split(separator: "\n").map(String.init)
+    }
+}
+
+/// "Neu in …": the notes of each version since the last one seen, newest first.
+struct WhatsNewView: View {
+    let notes: [ReleaseNotes]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if notes.isEmpty { Text("Zu dieser Version gibt es keine Notizen.") }
+                ForEach(notes, id: \.version) { n in
+                    Text("Neu in \(n.version)").font(.headline).padding(.top, 4)
+                    ForEach(n.bullets, id: \.self) { b in
+                        // **fett** as the file has it.
+                        Text((try? AttributedString(markdown: "• " + b)) ?? AttributedString("• " + b))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
@@ -466,6 +532,22 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("Funkhaus", systemImage: "antenna.radiowaves.left.and.right") }
             .tag("site")
+
+            Form {
+                Section {
+                    ForEach(MenuBarItem.allCases) { item in
+                        Toggle(item.label, isOn: Binding(get: { model.menuBarItems.items.contains(item) }, set: { model.setMenuBarItem(item, $0) }))
+                    }
+                } header: {
+                    Text("Neben dem Symbol in der Menüleiste")
+                } footer: {
+                    Text("Nichts ausgewählt: nur das Symbol. Was gerade keinen Wert hat, etwa der Fortschritt ohne Auftrag, fehlt.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Menüleiste", systemImage: "menubar.rectangle") }
+            .tag("menubar")
 
             Form {
                 if let identity {

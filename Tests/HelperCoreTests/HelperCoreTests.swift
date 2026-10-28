@@ -533,3 +533,73 @@ final class WorkerHealthTests: XCTestCase {
         log.write("two")
     }
 }
+
+/// The menu bar's text (Thorsten, 2026-10-28: "Maybe give the user the option to select what
+/// should be displayed there").
+final class MenuBarTitleTests: XCTestCase {
+    private func w(_ s: String) -> Double { Double(s.count) * 6 }
+    private let t = "\u{2009}"
+
+    func testTheSettingPersists() {
+        let suite = "slipstream-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(MenuBarItems.load(from: defaults), MenuBarItems([.progress])) // never set: the progress
+        MenuBarItems([.points, .fps, .status]).save(to: defaults)
+        XCTAssertEqual(defaults.string(forKey: MenuBarItems.key), "status,fps,points") // fixed order
+        XCTAssertEqual(MenuBarItems.load(from: defaults).items, [.status, .fps, .points])
+        MenuBarItems([]).save(to: defaults)
+        XCTAssertEqual(MenuBarItems.load(from: defaults).items, []) // none: the icon alone, not the default
+        XCTAssertEqual(MenuBarItems(rawValue: "cores, someday ,cpu")?.items, [.cores, .cpu]) // a later version's item
+        XCTAssertEqual(MenuBarItems([.cpu]).with(.fps, true).with(.cpu, false).items, [.fps])
+    }
+
+    func testTheDefaultShowsTheProgressWhileEncodingAndNothingIdle() {
+        XCTAssertEqual(MenuBarTitle.text(.standard, MenuBarState(), measure: w), "")
+        XCTAssertEqual(MenuBarTitle.text(.standard, MenuBarState(fraction: 0.473, etaS: 600, fps: 9.4), measure: w), "47\(t)%")
+        XCTAssertEqual(MenuBarTitle.text(MenuBarItems([]), MenuBarState(fraction: 0.5), measure: w), "")
+    }
+
+    func testEachItemInOrder() {
+        let all = MenuBarItems(Set(MenuBarItem.allCases))
+        let s = MenuBarState(paused: true, fraction: 0.12, etaS: 3900, fps: 9.44, coresBusy: 2.96, coresAllowed: 3, points: 1240.4)
+        let sep = MenuBarTitle.separator
+        XCTAssertEqual(MenuBarTitle.text(all, s, width: 1000, measure: w),
+                       "Pause\(sep)12\(t)%\(sep)1:05\(t)h\(sep)9,4\(t)fps\(sep)3/3\(sep)CPU\(t)296\(t)%\(sep)1.240\(t)P")
+        // Without values: an idle worker shows its cores and CPU, nothing else.
+        XCTAssertEqual(MenuBarTitle.text(all, MenuBarState(coresBusy: 0.04, coresAllowed: 12), width: 1000, measure: w),
+                       "0/12\(sep)CPU\(t)4\(t)%")
+        XCTAssertEqual(MenuBarTitle.eta(40), "40\(t)s")
+        XCTAssertEqual(MenuBarTitle.eta(719), "12\(t)min")
+        XCTAssertEqual(MenuBarTitle.text(MenuBarItems([.fps]), MenuBarState(fps: 24.6), measure: w), "25\(t)fps")
+    }
+
+    /// Never wider than MenuBarTitle.width: the menu bar is shared.
+    func testALongTextIsCut() {
+        let all = MenuBarItems(Set(MenuBarItem.allCases))
+        let s = MenuBarState(paused: true, fraction: 0.12, etaS: 3900, fps: 9.44, coresBusy: 2.96, coresAllowed: 3, points: 1240.4)
+        let text = MenuBarTitle.text(all, s, measure: w)
+        XCTAssertLessThanOrEqual(w(text), MenuBarTitle.width)
+        // Whole items go from the end; one too long alone keeps its start.
+        let sep = MenuBarTitle.separator
+        XCTAssertEqual(text, "Pause\(sep)12\(t)%\(sep)1:05\(t)h\(t)…") // 25 characters at 6 pt
+        XCTAssertEqual(MenuBarTitle.text(MenuBarItems([.points]), MenuBarState(points: 1_234_567), width: 30, measure: w), "1.23…")
+    }
+
+    /// The worker's cores count the tools it started: a child that spins, here.
+    func testProcessCPUCountsTheChildren() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sh")
+        child.arguments = ["-c", "while :; do :; done"]
+        try child.run()
+        defer { child.terminate() }
+        let cpu = ProcessCPU()
+        let me = getpid()
+        XCTAssertNil(cpu.sample(me, now: 0)) // the first sample has nothing to compare with
+        let t0 = ProcessInfo.processInfo.systemUptime
+        Thread.sleep(forTimeInterval: 1)
+        let cores = try XCTUnwrap(cpu.sample(me, now: ProcessInfo.processInfo.systemUptime - t0))
+        XCTAssertGreaterThan(cores, 0.6, "the spinning child's core")
+        XCTAssertNil(ProcessCPU().treeSeconds(999_999)) // gone
+    }
+}
