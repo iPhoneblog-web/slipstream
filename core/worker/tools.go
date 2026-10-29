@@ -37,6 +37,21 @@ type HostApp struct {
 	Version string `json:"version"`
 }
 
+// Product is the name every build of the core reports, on every OS (Thorsten, 2026-10-29: "all
+// OS use Slipstream"). Core and app share one version from 1.4.0, so the host app a core reports
+// by itself is Slipstream at its own version: the queue's view, its metrics and the Encoder
+// page say "Slipstream 1.4.0" for a Mac and a Linux server alike.
+const Product = "Slipstream"
+
+// hostApp is the app the queue is told this worker runs inside: the one the flags name, else
+// Slipstream at the worker's own version.
+func hostApp(cfg Config) *HostApp {
+	if cfg.HostAppName != "" {
+		return &HostApp{Name: cfg.HostAppName, Version: cfg.HostAppVersion}
+	}
+	return &HostApp{Name: Product, Version: cfg.Version}
+}
+
 // Model is a whisper model by its sha256.
 type Model struct {
 	Name   string `json:"name"`
@@ -330,6 +345,29 @@ func osName() string {
 	return runtime.GOOS + "/" + runtime.GOARCH
 }
 
+// System is the OS as a person reads it, for `slipstream --version`: "macOS 26.5", "Linux
+// (Debian 13)".
+func System() string {
+	if runtime.GOOS == "darwin" {
+		return osName()
+	}
+	data, _ := os.ReadFile("/etc/os-release")
+	if runtime.GOOS == "linux" {
+		return linuxSystem(string(data))
+	}
+	return runtime.GOOS
+}
+
+// linuxSystem is "Linux (Debian 13)" from /etc/os-release, "Linux" without one.
+func linuxSystem(osReleaseData string) string {
+	name, version := osRelease(osReleaseData)
+	name = strings.TrimSuffix(strings.TrimSuffix(name, " GNU/Linux"), " Linux")
+	if d := strings.TrimSpace(name + " " + version); d != "" {
+		return "Linux (" + d + ")"
+	}
+	return "Linux"
+}
+
 func hardware() json.RawMessage {
 	hw := map[string]any{"cpus": runtime.NumCPU(), "cpu_threads": runtime.NumCPU(), "arch": runtime.GOARCH}
 	var u unix.Utsname
@@ -595,11 +633,7 @@ func DetectCapabilities(ctx context.Context, cfg Config) (Capabilities, []string
 	} else {
 		problems = append(problems, "ffmpeg has no libass: no jobs with burnt-in captions")
 	}
-	var host *HostApp
-	if cfg.HostAppName != "" {
-		host = &HostApp{Name: cfg.HostAppName, Version: cfg.HostAppVersion}
-	}
-	return Capabilities{AppVersion: cfg.Version, OS: osName(), HostApp: host, Tools: tools, Models: models,
+	return Capabilities{AppVersion: cfg.Version, OS: osName(), HostApp: hostApp(cfg), Tools: tools, Models: models,
 		Fonts: fonts, Hardware: hardware()}, problems
 }
 

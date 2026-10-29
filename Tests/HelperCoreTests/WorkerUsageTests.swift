@@ -19,8 +19,8 @@ final class WorkerUsageTests: XCTestCase {
 
     /// A worker slow to answer `-h`, as one is when macOS checks a freshly updated app's helpers.
     private func slowWorker() throws -> URL {
-        let url = dir.appendingPathComponent("encode-worker")
-        try "#!/bin/sh\nsleep 0.3\nprintf 'usage: encode-worker [flags]\\n  -efficiency string\\n    \\toff, all or archive\\n'\n"
+        let url = dir.appendingPathComponent("slipstream")
+        try "#!/bin/sh\nsleep 0.3\nprintf 'usage: slipstream [flags]\\n  -efficiency string\\n    \\toff, all or archive\\n'\n"
             .write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         return url
@@ -57,6 +57,6 @@ final class WorkerUsageTests: XCTestCase {
     }
 
     func testUsageOfAMissingWorker() {
-        XCTAssertNil(WorkerFlags.usage(of: dir.appendingPathComponent("encode-worker")))
+        XCTAssertNil(WorkerFlags.usage(of: dir.appendingPathComponent("slipstream")))
     }
 }

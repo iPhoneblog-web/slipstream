@@ -3,19 +3,19 @@
 The queue offers a worker a job only when its tools match the server's own worker exactly, as
 text. So there is one toolchain, built from source by
 [kyrios/encode-queue](https://github.com/kyrios/encode-queue) for Linux and for macOS arm64
-(decided 2026-10-26), and Slipstream embeds the macOS build of its release:
-`bin/fetch-worker` downloads it beside the worker, checks it against the release's
-`SHA256SUMS`, and `bin/package` copies `ffmpeg`, `ffprobe`, `fc-list` and `whisper-cli` into
+(decided 2026-10-26), and Slipstream embeds the macOS build of its `toolchain-<N>` release:
+`bin/fetch-tools` downloads it, checks it against the sha256 pinned there, and `bin/package`
+copies `ffmpeg`, `ffprobe`, `fc-list` and `whisper-cli` into
 `Contents/Helpers`, and `versions.txt` and `fonts/` into `Contents/Resources`. This repository
-builds no tool of its own.
+builds no tool of its own; its Linux image builds on encode-queue's toolchain image.
 
 The release's `encode-toolchain-darwin-arm64.tar.gz` holds `ffmpeg`, `ffprobe`, `fc-list`,
 `whisper-cli`, `versions.txt` and `fonts/`, static, whisper.cpp with Metal. Its versions are
 encode-queue's, the same on the server's worker image and on the Mac: toolchain 3, from
-encode-queue `v0.2.7` on, embedded from `v0.2.21` (ffmpeg 9.0.2, libx265 4.3, libx264 core 165 r3222, libvmaf 3.2.1,
+encode-queue `v0.2.7` on, embedded from Slipstream 1.3.8 (ffmpeg 9.0.2, libx265 4.3, libx264 core 165 r3222, libvmaf 3.2.1,
 lame 3.100, whisper.cpp v1.9.5, libass 0.17.5). `versions.txt` names them, and About shows it.
-`bin/fetch-worker` pins the tag and both files' sha256; a new toolchain is a change to those
-lines.
+`bin/fetch-tools` pins the release and the tarball's sha256, `core/Dockerfile` the image's
+digest; a new toolchain is a change to both.
 
 ## Captions
 
@@ -48,10 +48,10 @@ Mac reports no libass and the queue gives it no caption job.
 **ffmpeg and ffprobe are GPLv3**: encode-queue builds them with `--enable-gpl --enable-version3`,
 linked with x264 and x265 (GPLv2 or later), LAME (LGPL) and libvmaf (BSD-2-Clause-Patent);
 whisper-cli is MIT. They are separate programs that Slipstream starts; Slipstream links none of
-them, and its own code is MIT ([LICENSE](../LICENSE)), as is encode-worker's.
+them, and its own code, the core's included, is MIT ([LICENSE](../LICENSE)).
 
-The app ships every licence in `Contents/Resources/licenses` (menu: "Lizenzen …"): Slipstream's,
-encode-worker's, Sparkle's (MIT, linked into the app for updates), and the toolchain's folder
+The app ships every licence in `Contents/Resources/licenses` (menu: "Lizenzen …"): Slipstream's
+(the core's too), Sparkle's (MIT, linked into the app for updates), and the toolchain's folder
 with each component's licence and `SOURCES.md`, which names each source by URL and sha256 and
 ffmpeg's configuration. The source itself, the Corresponding Source, is attached to
 encode-queue's `toolchain-<N>` release, from toolchain 2 on.

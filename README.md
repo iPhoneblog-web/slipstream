@@ -8,7 +8,8 @@ the menu bar and does two things:
   this Mac into an HEVC intermediate at 50 Mbit/s before the page uploads it
   ([docs/encoding.md](docs/encoding.md)). Its Safari extension carries the file from the page to
   the app and the result back ([docs/extension-protocol.md](docs/extension-protocol.md)).
-- **Jobs from the queue.** Once paired, it runs encode-queue's worker, which takes encodes and
+- **Jobs from the queue.** Once paired, it runs Slipstream's core, the same worker that runs on
+  Linux servers ([core/](core/README.md)), which takes encodes and
   whisper runs from the server through its own WireGuard tunnel, normal jobs at low priority and
   Sofort jobs ahead of them
   ([docs/worker.md](docs/worker.md)).
@@ -63,7 +64,7 @@ Safari with ⌘Q and open it again. The site, the extension and the pairing stay
 ## Licences
 
 Slipstream's own code is MIT: [LICENSE](LICENSE). It embeds programs under their own licences:
-encode-worker (MIT) and encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
+encode-queue's toolchain, in which **ffmpeg and ffprobe are GPLv3**
 (with x264 and x265, GPLv2 or later; LAME, LGPL; libvmaf, BSD-2-Clause-Patent) and whisper-cli is
 MIT, as is Sparkle, which installs updates. Every licence is in the app (menu: "Lizenzen …");
 the source of the toolchain is attached to encode-queue's `toolchain-<N>` release
@@ -77,8 +78,8 @@ from `project.yml`, because only `xcodebuild` builds a Safari web extension; eve
 needs no app is a Swift package (`swift test`).
 
 ```
-bin/package          tests, xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
-bin/fetch-worker     the worker and its tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's release
+bin/package          tests, the core (Go), xcodebuild, helpers in, signed inside out, dist/Slipstream.dmg, .zip, SHA256SUMS
+bin/fetch-tools      the core's tools (ffmpeg, ffprobe, whisper-cli) from kyrios/encode-queue's toolchain release
 bin/check-launch     starts the built app: Settings opens, and a cold start survives a slow worker (CI)
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
 bin/rungs.zsh        the intermediate's rate against the 1-point rule: intermediates, the 4K rung, VMAF

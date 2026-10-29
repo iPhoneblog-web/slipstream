@@ -1,4 +1,4 @@
-# The worker on the one toolchain (toolchain/): ffmpeg with libx265, libx264, libvmaf,
+# The core on the one toolchain (encode-queue's toolchain/): ffmpeg with libx265, libx264, libvmaf,
 # libmp3lame and libass, and whisper-cli, at toolchain/versions, the same build video-pipeline's
 # image uses, and the aligner's engine (v0.2.16). The models are not in the image: mount them at
 # EQ_WHISPER_MODELS_DIR, the aligner's folder among them. The image holds no address, port or
@@ -15,7 +15,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/encode-worker ./cmd/slipstream
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/slipstream ./cmd/slipstream
 
 # The align job's engine for the CPU (v0.2.16, aligner/): python-build-standalone's
 # CPython 3.12.12, relocatable, needing nothing of Debian's, and qwen-asr on PyTorch for the CPU,
@@ -35,7 +35,10 @@ RUN mkdir -p /opt/aligner && tar -xzf /tmp/python.tar.gz -C /opt/aligner \
 FROM ${TOOLCHAIN}
 RUN useradd --system --uid 10001 --home-dir /var/lib/encode-worker --create-home worker && mkdir -p /models
 COPY --from=aligner /opt/aligner /opt/aligner
-COPY --from=build /out/encode-worker /usr/local/bin/encode-worker
+COPY --from=build /out/slipstream /usr/local/bin/slipstream
+# encode-worker was this binary's name up to v0.2.27: the old name still works, and the state
+# stays in /var/lib/encode-worker, where a host's volume keeps the worker's key.
+RUN ln -s slipstream /usr/local/bin/encode-worker
 ENV EQ_WORKER_STATE_DIR=/var/lib/encode-worker \
     EQ_FFMPEG=/opt/encode-toolchain/bin/ffmpeg \
     EQ_FFPROBE=/opt/encode-toolchain/bin/ffprobe \
@@ -43,6 +46,6 @@ ENV EQ_WORKER_STATE_DIR=/var/lib/encode-worker \
     EQ_WHISPER_MODELS_DIR=/models \
     EQ_ALIGNER_PYTHON=/opt/aligner/python/bin/python3
 USER worker
-HEALTHCHECK --interval=60s --timeout=10s --start-period=120s CMD ["/usr/local/bin/encode-worker", "healthcheck"]
-ENTRYPOINT ["/usr/local/bin/encode-worker"]
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s CMD ["/usr/local/bin/slipstream", "healthcheck"]
+ENTRYPOINT ["/usr/local/bin/slipstream"]
 CMD ["run"]

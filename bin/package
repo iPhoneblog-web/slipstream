@@ -5,8 +5,10 @@
 # Signs ad hoc unless SIGN_IDENTITY names an identity in the keychain (CI: "Developer ID
 # Application"). With NOTARY_KEY (path to the App Store Connect .p8), NOTARY_KEY_ID and
 # NOTARY_ISSUER it also notarises and staples the app and the disk image (docs/release.md).
-# The worker (build/worker) and its tools (build/tools) come from encode-queue's release
-# (bin/fetch-worker) when they are there; without them the app runs ProRes only.
+# The core (core/, Go) is built here with the app's version, so app and core are one release; its
+# tools (build/tools) come from encode-queue's toolchain release (bin/fetch-tools). Without Go or
+# the tools the app runs ProRes only. Beside the dmg: the core for macOS and Linux, for the
+# release (docs/release.md).
 # The version is the last tag `v…` (0.0.0 before the first), the build number the commit count.
 set -euo pipefail
 cd "${0:A:h}/.."
@@ -21,6 +23,7 @@ done
 name=Slipstream
 if (( test )); then
   swift test
+  if command -v go >/dev/null; then (cd core && go test -count=1 ./...); fi
 fi
 
 version=$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null | sed 's/^v//' || true)
@@ -37,6 +40,14 @@ xcodebuild -project Slipstream.xcodeproj -scheme Slipstream -configuration Relea
   MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build" -quiet build
 swift build -c release --arch arm64 --product slipstream-cli
 cli_dir=$(swift build -c release --arch arm64 --show-bin-path)
+rm -rf build/core
+if command -v go >/dev/null; then
+  mkdir -p build/core
+  for target in darwin/arm64 linux/amd64; do
+    (cd core && GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -trimpath \
+      -ldflags "-s -w -X main.version=$version" -o "../build/core/slipstream-${target%/*}-${target#*/}" ./cmd/slipstream)
+  done
+fi
 
 app="dist/Slipstream.app"
 appex="$app/Contents/PlugIns/Slipstream Extension.appex"
@@ -48,11 +59,12 @@ plutil -lint "$app/Contents/Info.plist" "$appex/Contents/Info.plist" >/dev/null
 python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$appex/Contents/Resources/manifest.json"
 
 
-# Contents/Helpers: the ProRes encode (always), the worker and its tools (when built).
+# Contents/Helpers: the ProRes encode (always), the core and its tools (when built).
 helpers="$app/Contents/Helpers"
 mkdir -p "$helpers"
 cp "$cli_dir/slipstream-cli" "$helpers/"
-for f in build/tools/ffmpeg build/tools/ffprobe build/tools/fc-list build/tools/whisper-cli build/worker/encode-worker; do
+[[ -f build/core/slipstream-darwin-arm64 ]] && cp build/core/slipstream-darwin-arm64 "$helpers/slipstream"
+for f in build/tools/ffmpeg build/tools/ffprobe build/tools/fc-list build/tools/whisper-cli; do
   [[ -f $f ]] && cp "$f" "$helpers/"
 done
 # Data is no code: codesign takes only executables in Contents/Helpers.
@@ -70,13 +82,12 @@ fi
 # Resources/fonts: Inter and the fonts.conf that sees only it, for libass's captions; the worker
 # gets FONTCONFIG_FILE pointing there (docs/tools.md, "Captions").
 [[ -d build/tools/fonts ]] && ditto build/tools/fonts "$app/Contents/Resources/fonts"
-# Resources/licenses: Slipstream's own (MIT), encode-worker's (MIT), and the toolchain's folder:
+# Resources/licenses: Slipstream's own (MIT, the core's too), and the toolchain's folder:
 # each component's licence and SOURCES.md, with where the source is. ffmpeg and ffprobe are
 # GPLv3 programs; the app ships them only with these (docs/tools.md, "Licences").
 lic="$app/Contents/Resources/licenses"
 mkdir -p "$lic"
 cp LICENSE "$lic/Slipstream-LICENSE"
-[[ -f build/worker/LICENSE ]] && cp build/worker/LICENSE "$lic/encode-worker-LICENSE"
 [[ -d build/tools/licenses ]] && cp build/tools/licenses/* "$lic/"
 # Sparkle (MIT, with the notices of the code it carries) from the package Xcode checked out.
 cp build/dd/SourcePackages/checkouts/Sparkle/LICENSE "$lic/Sparkle-LICENSE"
@@ -85,15 +96,15 @@ if [[ -x "$helpers/ffmpeg" && ! -s "$lic/SOURCES.md" ]]; then
   exit 1
 fi
 # REQUIRE_WORKER=1 (CI) refuses the ProRes-only fallback.
-if [[ -x "$helpers/encode-worker" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
+if [[ -x "$helpers/slipstream" && -x "$helpers/ffmpeg" && -x "$helpers/whisper-cli" ]]; then
   # Toolchain 3 on: captions need the toolchain's fc-list and fonts, or libass takes another font.
   if [[ ! -x "$helpers/fc-list" || ! -f "$app/Contents/Resources/fonts/fonts.conf" ]]; then
-    print "the worker without fc-list or Resources/fonts: run bin/fetch-worker (toolchain 3 or later)" >&2
+    print "the core without fc-list or Resources/fonts: run bin/fetch-tools (toolchain 3 or later)" >&2
     exit 1
   fi
-  print "embedded: encode-worker $("$helpers/encode-worker" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
+  print "embedded: $("$helpers/slipstream" --version), $(head -1 "$app/Contents/Resources/versions.txt"), $("$helpers/ffmpeg" -hide_banner -version | head -1 | cut -d' ' -f1-3)"
 elif [[ -n ${REQUIRE_WORKER:-} ]]; then
-  print "no worker or tools in build/: run bin/fetch-worker" >&2
+  print "no core or tools: install Go and run bin/fetch-tools" >&2
   exit 1
 else
   print "embedded: no worker, ProRes only"
@@ -177,6 +188,13 @@ fi
 hdiutil verify -quiet dist/$name.dmg
 
 (cd dist && ditto -c -k --sequesterRsrc --keepParent Slipstream.app $name.zip)
-(cd dist && shasum -a 256 $name.dmg $name.zip > SHA256SUMS)
+# The core on its own, for the release: the Mac's as signed inside the app, Linux's as built.
+cores=()
+if [[ -f "$helpers/slipstream" ]]; then
+  cp "$helpers/slipstream" dist/slipstream-darwin-arm64
+  cp build/core/slipstream-linux-amd64 dist/
+  cores=(slipstream-darwin-arm64 slipstream-linux-amd64)
+fi
+(cd dist && shasum -a 256 $name.dmg $name.zip $cores > SHA256SUMS)
 echo "version $version, build $build, signed by ${identity/-/ad hoc}"
 cat dist/SHA256SUMS

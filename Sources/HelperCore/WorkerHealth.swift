@@ -35,9 +35,9 @@ public enum WorkerExit {
         }
         let lines = lastLines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         // A Go panic prints "panic: …" and then the goroutines; the panic line is the reason.
-        // encode-worker prints its fatal error as "encode-worker: …" just before it exits.
+        // The core prints its fatal error as "slipstream: …" just before it exits.
         let said = lines.last(where: { $0.hasPrefix("panic:") || $0.hasPrefix("fatal error:") })
-            ?? lines.last(where: { $0.hasPrefix("encode-worker:") })
+            ?? lines.last(where: { $0.hasPrefix("slipstream:") })
             ?? lines.last
         guard let said else { return how }
         let text = said.count > 160 ? String(said.prefix(159)) + "…" : said

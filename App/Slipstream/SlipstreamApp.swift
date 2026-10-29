@@ -418,7 +418,7 @@ enum About {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
-    /// The licences folder in Finder: Slipstream's and encode-worker's (MIT), and the
+    /// The licences folder in Finder: Slipstream's (MIT, the core's included), and the
     /// toolchain's, with SOURCES.md, which says where the source of ffmpeg (GPLv3) is.
     @MainActor
     static func showLicences() {
@@ -431,7 +431,7 @@ enum About {
         }
     }
 
-    /// `Contents/Resources/versions.txt`, from the toolchain of encode-queue (bin/fetch-worker).
+    /// `Contents/Resources/versions.txt`, from the toolchain of encode-queue (bin/fetch-tools).
     static func bundledTools() -> [String] {
         guard let text = Paths.toolVersions else {
             return ["Ohne Worker und Werkzeuge"]

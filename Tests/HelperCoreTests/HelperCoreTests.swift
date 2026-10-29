@@ -497,8 +497,8 @@ final class WorkerHealthTests: XCTestCase {
     }
 
     func testReason() {
-        XCTAssertEqual(WorkerExit.reason(status: 1, signal: nil, lastLines: ["level=WARN msg=x", "encode-worker: the tunnel: no route"]),
-                       "encode-worker: the tunnel: no route (Status 1)")
+        XCTAssertEqual(WorkerExit.reason(status: 1, signal: nil, lastLines: ["level=WARN msg=x", "slipstream: the tunnel: no route"]),
+                       "slipstream: the tunnel: no route (Status 1)")
         // A Go panic: the panic line, not the last goroutine line.
         XCTAssertEqual(WorkerExit.reason(status: 2, signal: nil, lastLines: ["panic: runtime error: index out of range [3]", "", "goroutine 7 [running]:", "main.go:12 +0x1c"]),
                        "panic: runtime error: index out of range [3] (Status 2)")

@@ -204,7 +204,7 @@ func (w *Worker) emit(event string, fields map[string]any) {
 	w.cfg.Events(fields)
 }
 
-// healthFile is touched on every answer from the queue; `encode-worker healthcheck` reads it.
+// healthFile is touched on every answer from the queue; `slipstream healthcheck` reads it.
 func (w *Worker) healthFile() string { return filepath.Join(w.cfg.StateDir, "health") }
 
 func (w *Worker) contact(err error) {

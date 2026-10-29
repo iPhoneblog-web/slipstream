@@ -17,6 +17,31 @@ func TestOSRelease(t *testing.T) {
 	}
 }
 
+// The system as `slipstream --version` and the Encoder page say it (1.4.0).
+func TestLinuxSystem(t *testing.T) {
+	for data, want := range map[string]string{
+		"PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\n": "Linux (Debian 13)",
+		"NAME=\"Alpine Linux\"\nVERSION_ID=3.22.1\n":                                                   "Linux (Alpine 3.22.1)",
+		"NAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\n":                                                      "Linux (Ubuntu 24.04)",
+		"": "Linux",
+	} {
+		if got := linuxSystem(data); got != want {
+			t.Errorf("%q: %q, want %q", data, got, want)
+		}
+	}
+}
+
+// A core on its own reports itself as Slipstream at its version; one an app starts with
+// --host-app-name keeps the app's name and version (1.4.0).
+func TestHostAppIsSlipstreamByDefault(t *testing.T) {
+	if h := hostApp(Config{Version: "1.4.0"}); h == nil || *h != (HostApp{Name: "Slipstream", Version: "1.4.0"}) {
+		t.Fatalf("%+v", h)
+	}
+	if h := hostApp(Config{Version: "1.4.0", HostAppName: "Other", HostAppVersion: "2.0"}); *h != (HostApp{Name: "Other", Version: "2.0"}) {
+		t.Fatalf("%+v", h)
+	}
+}
+
 func TestCPUInfoCountsPhysicalCores(t *testing.T) {
 	// Two cores with two threads each.
 	data := ""
