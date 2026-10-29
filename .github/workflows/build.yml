@@ -49,6 +49,7 @@ jobs:
   # (CPU time, efficiency cores) are compiled and tested for real.
   core-test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
     runs-on: ${{ matrix.os }}

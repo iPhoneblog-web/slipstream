@@ -42,6 +42,18 @@ func TestNormalToolsRunAtNice19AndRealtimeOnesAtTheWorkersNice(t *testing.T) {
 		t.Skip("no nice here")
 	}
 	mine := psNice(t, os.Getpid())
+	// nice -n 19 adds to the worker's own nice, up to the system's most (19 on Linux, 20 on
+	// macOS): 19 for a worker at 0 (the app's, the image's), 9 under GitHub's macOS runner, which
+	// starts everything at -10.
+	n, err := strconv.Atoi(mine)
+	if err != nil {
+		t.Fatalf("ps nice %q: %v", mine, err)
+	}
+	most := 19
+	if runtime.GOOS == "darwin" {
+		most = 20
+	}
+	normal := strconv.Itoa(min(n+Nice, most))
 	var wg sync.WaitGroup
 	errs := make(chan string, 40)
 	for i := 0; i < 40; i++ {
@@ -59,7 +71,7 @@ func TestNormalToolsRunAtNice19AndRealtimeOnesAtTheWorkersNice(t *testing.T) {
 			}
 			cmd.Wait()
 			got := strings.Fields(out.String())
-			want := "19"
+			want := normal
 			if rt {
 				want = mine
 			}
