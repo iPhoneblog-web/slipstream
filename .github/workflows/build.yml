@@ -5,6 +5,9 @@
 # .../releases/latest/download/ is always the newest (Sparkle reads appcast.xml there). A
 # manual run of sign-sums.yml signs an older release's SHA256SUMS. docs/release.md.
 #
+# The core (core/, Go) has its own jobs beside the app's tests: its tests on Linux and macOS, its
+# ffmpeg tests in the toolchain image, its Linux image built and started (not pushed).
+#
 # Three jobs, so that nothing runs beside a secret it does not need: the tests see no secret;
 # the signing job has the keychain and the notary key but only read access to the repository;
 # only the publishing job may write, and it runs no code of this repository. Actions are pinned
@@ -41,6 +44,85 @@ jobs:
       # The extension's origin checks (docs/traps.md, "Origins") on the real scripts.
       - name: Test the extension
         run: node --test Tests/extension/*.test.mjs
+
+  # The core (core/, Go; core/README.md): on Linux and on the Mac, where its darwin files
+  # (CPU time, efficiency cores) are compiled and tested for real.
+  core-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - name: The core's control API is valid OpenAPI 3.1
+        if: runner.os == 'Linux'
+        run: npx --yes @redocly/cli@1.25.0 lint api/worker-control.yaml
+
+  # The core's tests that run ffmpeg, with the toolchain's own (encode-toolchain 3, the build
+  # every worker runs). EQ_REQUIRE_REAL_FFMPEG=1 makes a missing ffmpeg fail them instead of
+  # skipping them. They run as uid 1001, not root: as root a read-only folder is writable, and
+  # a test's premise is gone.
+  core-real-ffmpeg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/kyrios/encode-toolchain:3@sha256:90d801a26a7e695c3b64434bac97f4e95d3d0df664f25c264ae7dc3dc83f502e
+    env:
+      EQ_REQUIRE_REAL_FFMPEG: "1"
+    steps:
+      - name: A C compiler for -race, and git for the checkout
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gcc libc6-dev git ca-certificates
+          rm -rf /var/lib/apt/lists/*
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: The worker's tests with the toolchain's ffmpeg
+        run: |
+          ffmpeg -hide_banner -version | head -1
+          mkdir -p /tmp/u && chown -R 1001:1001 /tmp/u "$GITHUB_WORKSPACE"
+          cd core
+          setpriv --reuid=1001 --regid=1001 --clear-groups \
+            env HOME=/tmp/u GOPATH=/tmp/u/go GOCACHE=/tmp/u/cache PATH="$PATH" EQ_REQUIRE_REAL_FFMPEG=1 \
+            go test -race -count=1 ./worker/
+
+  # The core's Linux image (core/Dockerfile) builds and starts, and its tools are there. Not
+  # pushed here.
+  core-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: core
+          file: core/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: slipstream:ci
+          cache-from: type=gha,scope=core-image
+          cache-to: type=gha,mode=max,scope=core-image
+      - name: The image starts, and the worker's tools are there
+        run: |
+          docker run --rm slipstream:ci versions | tee versions.json
+          for t in ffmpeg libx265 libx264 whisper.cpp qwen-asr; do jq -e --arg t "$t" '.tools[] | select(.name == $t)' versions.json >/dev/null; done
+          jq -e '.fonts | index("Inter ExtraBold")' versions.json >/dev/null
 
   build:
     needs: test

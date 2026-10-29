@@ -1,9 +1,11 @@
 # AGENTS.md
 
 Rules for agents changing this repository. [README.md](README.md) explains what Slipstream is
-and how to build it; read it next, then only the page your task needs. The queue and the worker
-it embeds are [kyrios/encode-queue](https://github.com/kyrios/encode-queue); the Funkhaus it
-works for and the servers behind it are documented outside this repository.
+and how to build it; read it next, then only the page your task needs. Slipstream's core, the
+worker that runs on every machine, is [core/](core/README.md) (Go); the queue it takes jobs from
+is [kyrios/encode-queue](https://github.com/kyrios/encode-queue), which imports the core's
+`tunnel`, `aligner` and `worker` packages. The Funkhaus it works for and the servers behind it
+are documented outside this repository.
 
 ## 1. Always
 
@@ -58,7 +60,9 @@ says why; where a number cost a measurement, the message keeps the measurement.
 
 ## 4. Tests and trying the app
 
-**No change to `DropCore` or `HelperCore` is finished without a test** (`Tests/`, XCTest).
+**No change to `DropCore` or `HelperCore` is finished without a test** (`Tests/`, XCTest), **nor
+a change to `core/`** (Go, `go test -race ./...` in `core/`; CI runs the worker's ffmpeg tests
+with the toolchain's ffmpeg).
 
 - **A guard needs a test in which it fires**: a file that is not a video, a codec the Mac cannot
   decode, a cancel, a wrong origin or token, a slice that does not fit, an index at the end.
