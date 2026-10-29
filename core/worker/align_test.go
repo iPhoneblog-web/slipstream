@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kyrios/encode-queue/internal/aligner"
+	"github.com/kyrios/slipstream/core/aligner"
 )
 
 // tgz is a gzipped tarball of these entries: a name ending in "/" is a folder, "->" a symlink.

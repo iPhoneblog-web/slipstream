@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kyrios/encode-queue/internal/aligner"
+	"github.com/kyrios/slipstream/core/aligner"
 	"golang.org/x/sys/unix"
 )
 

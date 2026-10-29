@@ -1,5 +1,6 @@
-// encode-worker takes jobs from encode-queue through its own userspace WireGuard and runs
-// them, a normal job's at nice 19 and a realtime job's at the worker's own nice (v0.2.20).
+// Slipstream's core, the worker (its binary still encode-worker), takes jobs from encode-queue
+// through its own userspace WireGuard and runs them, a normal job's at nice 19 and a realtime
+// job's at the worker's own nice (v0.2.20).
 //
 //	encode-worker pubkey        print this worker's public key (made on first use), for pairing
 //	encode-worker versions      print what this worker runs, as the queue will see it
@@ -29,9 +30,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kyrios/encode-queue/internal/config"
-	"github.com/kyrios/encode-queue/internal/tunnel"
-	"github.com/kyrios/encode-queue/internal/worker"
+	"github.com/kyrios/slipstream/core/internal/config"
+	"github.com/kyrios/slipstream/core/tunnel"
+	"github.com/kyrios/slipstream/core/worker"
 )
 
 var version = "dev"

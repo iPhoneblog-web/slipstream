@@ -94,7 +94,7 @@ func Rank(engine string) int {
 const gib = 1 << 30
 
 // PeakBytes is a job's expected peak on an engine, for the RAM gate and the slots. MLX: 3.0 to
-// 3.4 GiB on every episode of #24 with its cache freed after each piece. PyTorch: the lean
+// 3.4 GiB on every episode of video-pipeline#24 with its cache freed after each piece. PyTorch: the lean
 // precision's, 2.5 to 2.9 GB (0.8 to 1.2 GB of its own and 1.7 GB of the weights' pages, encoder,
 // 2026-10-28), which the worker uses whenever float32's 4.4 to 4.9 GB do not fit
 // (TorchFloat32Bytes): beside a 4K `slower` archive encode on encoder (10 GB, 5.5 GB for the
@@ -109,7 +109,7 @@ const TorchFloat32Bytes = 6 * gib
 
 // Speed is an engine's seconds of audio per second of work, and LoadS its start, for the
 // expected completion time before a worker has results: MLX 0.011 of the audio's length and
-// 1.4 s to load on the Mac Studio (#24); PyTorch on encoder's six cores in float32 0.15 and 7 s
+// 1.4 s to load on the Mac Studio (video-pipeline#24); PyTorch on encoder's six cores in float32 0.15 and 7 s
 // (2026-10-28; lean 0.58 and 6 s, which the correction learns where it runs). Each worker's results correct them (ect.go's learn).
 var (
 	Speed = map[string]float64{EngineMLX: 90, EngineTorch: 6.7}

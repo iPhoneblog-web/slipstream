@@ -1,4 +1,4 @@
-module github.com/kyrios/encode-queue
+module github.com/kyrios/slipstream/core
 
 go 1.27.1
 

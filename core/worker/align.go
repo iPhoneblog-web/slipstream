@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kyrios/encode-queue/internal/aligner"
+	"github.com/kyrios/slipstream/core/aligner"
 )
 
 // **The align job** (v0.2.16, internal/aligner): Qwen3-ForcedAligner times the words of a text

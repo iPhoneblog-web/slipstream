@@ -15,9 +15,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/encode-worker ./cmd/encode-worker
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/encode-worker ./cmd/slipstream
 
-# The align job's engine for the CPU (v0.2.16, internal/aligner): python-build-standalone's
+# The align job's engine for the CPU (v0.2.16, aligner/): python-build-standalone's
 # CPython 3.12.12, relocatable, needing nothing of Debian's, and qwen-asr on PyTorch for the CPU,
 # every package by its hashes, wheels only, none of qwen-asr's demo and server dependencies. The
 # import at the end is the smoke test. The model is not in the image: the models folder holds it.
@@ -25,7 +25,7 @@ FROM ${TOOLCHAIN} AS aligner
 ADD --checksum=sha256:6249bea270cdd4218a258edb3a1c5602dd9dc0f785b9d29963676276a3838e60 \
     https://github.com/astral-sh/python-build-standalone/releases/download/20260114/cpython-3.12.12%2B20260114-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz \
     /tmp/python.tar.gz
-COPY internal/aligner/requirements-torch-cpu.txt internal/aligner/requirements-torch.txt /tmp/
+COPY aligner/requirements-torch-cpu.txt aligner/requirements-torch.txt /tmp/
 RUN mkdir -p /opt/aligner && tar -xzf /tmp/python.tar.gz -C /opt/aligner \
  && P="/opt/aligner/python/bin/python3 -I -m pip install --no-deps --require-hashes --only-binary=:all: --no-cache-dir --no-input --disable-pip-version-check" \
  && $P --index-url https://download.pytorch.org/whl/cpu -r /tmp/requirements-torch-cpu.txt \

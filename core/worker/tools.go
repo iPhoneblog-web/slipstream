@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/kyrios/encode-queue/internal/aligner"
+	"github.com/kyrios/slipstream/core/aligner"
 )
 
 // Tool is a tool and its exact version string (helper.yaml, Tool).

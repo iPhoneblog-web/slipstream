@@ -1,7 +1,7 @@
 """Qwen3-ForcedAligner-0.6B for encode-queue's align job (v0.2.16): the words of a text, timed in
 the sound, in whisper-cli's `-oj` shape, one segment per word. The worker embeds this script and
 runs it with the aligner's own Python: MLX and mlx-qwen3-asr on a Mac, PyTorch and qwen-asr on
-Linux. Measured for iPhoneblog's captions in video-pipeline's docs/aligner-timing.md (#24).
+Linux. Measured in video-pipeline's docs/aligner-timing.md (video-pipeline#24).
 
     align.py version
     align.py run --model DIR --wav WAV --words WORDS.json --language de --out OUT.json
@@ -19,7 +19,7 @@ import sys
 import time
 
 # A piece is at most 30 s: longer ones met the same onsets, but broke the aligner's order more
-# often and took more memory (4.5 GiB at 300 s against 3.2 GiB, #24).
+# often and took more memory (4.5 GiB at 300 s against 3.2 GiB, video-pipeline#24).
 PIECE_S = 30.0
 MAX_WORDS = 100_000
 MAX_WORD_CHARS = 200
@@ -146,7 +146,7 @@ def whisper_doc(words, times, language, engine, pieces):
 
 class MLX:
     """mlx-qwen3-asr on a Mac's GPU, bfloat16 as published, MLX's buffer cache freed after each
-    piece: without it a 21-minute episode in 30-second pieces grew to 24 GiB (#24)."""
+    piece: without it a 21-minute episode in 30-second pieces grew to 24 GiB (video-pipeline#24)."""
 
     name = "mlx-qwen3-asr"
 

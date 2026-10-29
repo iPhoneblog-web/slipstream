@@ -83,6 +83,7 @@ bin/check-launch     starts the built app: Settings opens, and a cold start surv
 bin/test-encode      a 4K ProRes sample through the intermediate, checked with ffprobe
 bin/rungs.zsh        the intermediate's rate against the 1-point rule: intermediates, the 4K rung, VMAF
 swift test           the tests (the fixtures are committed)
+cd core && go test -race ./...   the core's tests (core/README.md)
 ```
 
 ```
@@ -95,6 +96,7 @@ release-notes/           each version's notes, German (docs/release.md, "Release
 App/Slipstream/          the menu bar app: menu, settings, log, loopback listener, worker, keychain
 Extension/               the Safari web extension: native-messaging handler, content script, bridge
 Tests/                   XCTest; DropCoreTests/fixtures holds small ffmpeg-made files (make.sh)
+core/                    Slipstream's core, the worker on every OS (Go, its own module; core/README.md)
 ```
 
 | Page | Read it for |

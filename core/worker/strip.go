@@ -22,7 +22,7 @@ import (
 // **The strip job** (v0.2.22; Thorsten, 2026-10-28, "Server strip + local bonus"; the spec was
 // video-pipeline#29's): the pictures Funkhaus's timeline shows along a video, as Final Cut does.
 // Since v0.2.23 its source is the upload itself, an iPhone's 10-bit HEVC as well as an 8-bit
-// H.264, so Alex sees them while he trims. ffmpeg decodes only the keyframes (`-skip_frame
+// H.264, so the editor sees them while trimming. ffmpeg decodes only the keyframes (`-skip_frame
 // nokey`), so each picture is one decode, and gives each its time, its scene score against the
 // keyframe before and its mean colour. Two levels, Height px tall at the video's aspect, in JPEG
 // sheets named by their content, so a page may keep them for good:
