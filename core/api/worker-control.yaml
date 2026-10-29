@@ -65,7 +65,7 @@ paths:
 components:
   schemas:
     Progress:
-      $ref: 'helper.yaml#/components/schemas/Progress'
+      $ref: 'https://raw.githubusercontent.com/kyrios/encode-queue/v0.2.25/api/helper.yaml#/components/schemas/Progress'
     Status:
       type: object
       required: [state, connected, jobs, recent, finished_today]
@@ -78,7 +78,7 @@ components:
         last_contact: { type: [string, 'null'], format: date-time }
         last_error: { type: string, description: The last error reaching the queue. }
         refused: { type: array, items: { type: string }, description: 'Job kinds the queue refuses and why, e.g. "rung: libx265 differs: worker 4.0, reference 4.1+1-1d117be".' }
-        tools: { type: array, items: { $ref: 'helper.yaml#/components/schemas/Tool' } }
+        tools: { type: array, items: { $ref: 'https://raw.githubusercontent.com/kyrios/encode-queue/v0.2.25/api/helper.yaml#/components/schemas/Tool' } }
         jobs:
           type: array
           items:
