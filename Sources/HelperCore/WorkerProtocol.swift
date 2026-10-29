@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the embedded worker (`encode-worker` from kyrios/encode-queue) prints on its standard
+/// What the embedded worker (`slipstream`, Slipstream's core in core/) prints on its standard
 /// output, one JSON object per line (docs/worker.md). Unknown events and fields are ignored, so a
 /// newer worker does not break an older app.
 public enum WorkerEvent: Equatable, Sendable {

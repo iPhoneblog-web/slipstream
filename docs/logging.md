@@ -23,7 +23,7 @@ file. The code is `App/Slipstream/Log.swift` (where lines go) and `HelperCore/Lo
 
   ```
   2026-10-28T19:08:35.204Z NOTICE worker    worker started, pid 2188
-  2026-10-28T19:08:35.281Z INFO   worker    encode-worker up version=v0.2.18 name="Mac Studio"
+  2026-10-28T19:08:35.281Z INFO   worker    slipstream up version=1.4.0 name="Mac Studio"
   2026-10-28T19:26:49.836Z NOTICE encode    one_144 (ls_01…): started, rung 2160p, normal slot
   ```
 
@@ -66,7 +66,7 @@ The worker writes Go's log/slog text form to its standard error:
 (`DEBUG`, `INFO`, `WARN`, `ERROR`, and slog's offsets such as `INFO+2`). It keeps the message and
 its attributes and drops the time, because the file has its own: `job ended lease=… outcome=…`.
 A line in another form is a fault when it starts `panic:` or `fatal error:`, an error when it
-starts `encode-worker:` (the worker's last word), and otherwise a warning.
+starts `slipstream:` (the core's last word), and otherwise a warning.
 
 A job's lines (`log` events on standard output, such as the ffmpeg command or "source … bytes,
 sha256 checked") carry no level up to encode-queue v0.2.18, so they are info. A `level` field in

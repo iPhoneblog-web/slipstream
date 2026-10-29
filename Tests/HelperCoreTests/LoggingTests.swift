@@ -32,9 +32,9 @@ final class LoggingTests: XCTestCase {
     }
 
     func testWorkerStandardError() {
-        let up = #"time=2026-10-28T20:08:35.213+01:00 level=INFO msg="encode-worker up" version=v0.2.12 name="Mac Studio""#
+        let up = #"time=2026-10-28T20:08:35.213+01:00 level=INFO msg="slipstream up" version=1.4.0 name="Mac Studio""#
         XCTAssertEqual(WorkerLogLine.stderr(up).0, .info)
-        XCTAssertEqual(WorkerLogLine.stderr(up).1, #"encode-worker up version=v0.2.12 name="Mac Studio""#)
+        XCTAssertEqual(WorkerLogLine.stderr(up).1, #"slipstream up version=1.4.0 name="Mac Studio""#)
         let warn = #"time=2026-10-28T20:08:35.213+01:00 level=WARN msg=lease lease=ls_1 err="no answer""#
         XCTAssertEqual(WorkerLogLine.stderr(warn).0, .warning)
         XCTAssertEqual(WorkerLogLine.stderr(warn).1, #"lease lease=ls_1 err="no answer""#)
@@ -45,7 +45,7 @@ final class LoggingTests: XCTestCase {
         // Not slog: Go's runtime, the worker's last word, a tool's line.
         XCTAssertEqual(WorkerLogLine.stderr("panic: runtime error: index out of range").0, .fault)
         XCTAssertEqual(WorkerLogLine.stderr("fatal error: concurrent map writes").0, .fault)
-        XCTAssertEqual(WorkerLogLine.stderr("encode-worker: the tunnel: no route").0, .error)
+        XCTAssertEqual(WorkerLogLine.stderr("slipstream: the tunnel: no route").0, .error)
         XCTAssertEqual(WorkerLogLine.stderr("goroutine 7 [running]:").0, .warning)
         // time= without level= is not slog's form; the line stays whole.
         XCTAssertEqual(WorkerLogLine.stderr("time=soon").0, .warning)

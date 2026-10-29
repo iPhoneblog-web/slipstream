@@ -1,21 +1,22 @@
 # The embedded worker
 
-Slipstream carries the queue's worker, `encode-worker` from
-[kyrios/encode-queue](https://github.com/kyrios/encode-queue), as
-`Contents/Helpers/encode-worker`, the macOS arm64 binary of its release, with that release's
-toolchain beside it (`bin/fetch-worker`, `v0.2.21`, toolchain 3; [tools.md](tools.md)). From
-`v0.2.0` it reports the Mac's hardware (chip, cores, memory, OS) and its transfer rates to the
-queue, and a tool ended by a signal as `killed`.
+Slipstream carries its core, the worker of [core/](../core/README.md), as
+`Contents/Helpers/slipstream`, built by `bin/package` for macOS arm64 at the app's own version,
+with encode-queue's toolchain beside it (`bin/fetch-tools`, toolchain 3; [tools.md](tools.md)).
+The same core runs on Linux servers (`ghcr.io/kyrios/slipstream`). Up to Slipstream 1.3.8 it was
+encode-queue's `encode-worker`, fetched from its release (1.3.8 carried v0.2.21); the version
+numbers in this page's history (`v0.2.x`) are the core's from that time.
 
-**No `--app-version`, but `--host-app-*`.** The helper API's `app_version` is the worker's own
-release, which the queue compares with its `min_app_version`; the worker sends it by itself.
-Slipstream's own name and version go to `host_app` (helper.yaml 1.1.1, worker `v0.2.1` and later), so the
-queue and the Funkhaus's Encoder page see which Slipstream a Mac runs.
+**One version.** The helper API's `app_version` is the core's version, the app's too (1.4.0 on),
+which the queue compares with its `min_app_version` and its gates. The app still passes
+`--host-app-name Slipstream --host-app-version <x.y.z>`, the same values the core reports by
+itself without them, so the queue and the Funkhaus's Encoder page see "Slipstream 1.4.0" for a
+Mac and a Linux server alike.
 
 ## How the app runs it
 
 ```
-encode-worker --key-stdin --tunnel-file <support>/tunnel.conf   (nice 0, QoS user-initiated)
+slipstream --key-stdin --tunnel-file <support>/tunnel.conf   (nice 0, QoS user-initiated)
   --state-dir <support>/worker --name <Mac name> --host-app-name Slipstream --host-app-version <x.y.z>
   --threads N --gpu true|false --jobs N
   --high-slots N   (only when the worker's -h lists it, v0.2.14 on)
@@ -125,7 +126,7 @@ Its standard error goes to the log, at the level of each slog line
 
 - **The menu says why**: "Encoder gestoppt: <reason>, neuer Versuch <time>". The reason
   (`HelperCore.WorkerExit`) is the worker's last word on standard error: a Go `panic:` line, else
-  its `encode-worker: …` line, else its last line; and how it ended (`Status N`, or `Signal N`
+  its `slipstream: …` line, else its last line; and how it ended (`Status N`, or `Signal N`
   with its name). The app reads standard error to its end, at most 2 s, before it decides, so a
   panic's text is there. The line goes as soon as a new worker sends any event.
 - **It starts again with backoff** (`HelperCore.WorkerRestart`): 10 s after the first stop,
@@ -136,11 +137,11 @@ Its standard error goes to the log, at the level of each slog line
   stopping it ("worker started, pid …", "worker stopped after …: …; stop 2 in a row, next start
   in 20 s"), at notice and error level, which macOS keeps.
 
-encode-queue implements this contract from `v0.1.0` on (its `worker-control.yaml`). It sends
-`job` at every phase change and once a second. whisper.cpp's version comes with
-`--whisper-version`: the toolchain's `versions.txt` lives in `Contents/Resources`, since codesign
-takes no data in `Contents/Helpers`. `bin/fetch-worker` pins the release by tag and sha256;
-`HelperCore/WorkerProtocol.swift` and its tests hold the format on this side.
+The core implements this contract (`core/api/worker-control.yaml`). It sends `job` at every phase
+change and once a second. whisper.cpp's version comes with `--whisper-version`: the toolchain's
+`versions.txt` lives in `Contents/Resources`, since codesign takes no data in
+`Contents/Helpers`. `bin/fetch-tools` pins the toolchain by sha256; `HelperCore/WorkerProtocol.swift`
+and its tests hold the format on this side, `core/worker` and its tests on the other.
 
 ## Pairing
 

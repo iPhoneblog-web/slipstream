@@ -2,10 +2,23 @@
 
 ## A release
 
-A tag `v<major>.<minor>.<patch>` on `main` is a release. `.github/workflows/build.yml` builds
-every push and pull request; on a tag it also publishes `Slipstream.dmg`, `Slipstream.zip`,
-`appcast.xml`, `SHA256SUMS` and `SHA256SUMS.sig` as that tag's release, marked latest. The file
-names carry no version, so `releases/latest/download/Slipstream.dmg` is always the newest.
+A tag `v<major>.<minor>.<patch>` on `main` is a release of **all of Slipstream at one version**:
+the Mac app and the core inside it, the core for Linux and its image (Thorsten, 2026-10-29: "all
+OS use Slipstream"; one number from 1.4.0, when the core left encode-queue at its v0.2.27). No Mac
+runs an older core than the server. `.github/workflows/build.yml` builds every push and pull
+request; on a tag it also publishes:
+
+- the release, marked latest: `Slipstream.dmg`, `Slipstream.zip`, `slipstream-darwin-arm64`
+  (the core as signed inside the app), `slipstream-linux-amd64`, `appcast.xml`, `SHA256SUMS`
+  (all of them) and `SHA256SUMS.sig`. The file names carry no version, so
+  `releases/latest/download/Slipstream.dmg` is always the newest.
+- the image `ghcr.io/kyrios/slipstream:v<…>` (linux/amd64), which infra pins by digest.
+- the tag `core/v<…>` on the same commit, under which Go finds the module
+  `github.com/kyrios/slipstream/core`; encode-queue imports it at that version.
+
+`bin/package` builds the core with the app's version (the last tag), so `slipstream --version`,
+the queue's `app_version` and the app's About say the same number. A change the queue gates on
+(a new job kind, a new flag) is a minor version; a fix is a patch.
 
 ```bash
 git tag -a v1.0.1 -m "Slipstream 1.0.1" origin/main && git push origin v1.0.1
@@ -75,21 +88,28 @@ event).
 
 ## What CI does
 
-Three jobs, so that nothing runs beside a secret it does not need:
+Nothing runs beside a secret it does not need:
 
-1. **test**: `swift test`, no secret.
-2. **build**: `bin/fetch-worker` (the worker and its tools from encode-queue's release, pinned
-   by tag and sha256; [worker.md](worker.md), [tools.md](tools.md)) before any secret is on the
-   runner, then the Developer ID identity into a temporary keychain and the notary key into a
-   file, and `bin/package --no-test` with `REQUIRE_WORKER=1`: `xcodegen`, `xcodebuild`, the
-   helpers into `Contents/Helpers` (the log line `embedded: encode-worker …` shows which),
+1. **test**: `swift test`, no secret. **core-test** (Linux and macOS), **core-real-ffmpeg** (the
+   worker's tests in encode-toolchain 3, with its ffmpeg) and **core-image** (the Linux image
+   built and started), no secret ([core/README.md](../core/README.md)).
+2. **build**, after all tests but the image's: the core's Go modules and `bin/fetch-tools` (the
+   toolchain from encode-queue's `toolchain-<N>` release, pinned by sha256; [worker.md](worker.md),
+   [tools.md](tools.md)) before any secret is on the runner, then the Developer ID identity
+   into a temporary keychain and the notary key into a file, and `bin/package --no-test` with
+   `REQUIRE_WORKER=1`: `xcodegen`, `xcodebuild`, the core built for macOS and Linux, the
+   helpers into `Contents/Helpers` (the log line `embedded: slipstream 1.4.0 (…)` shows which),
    signing inside out (each helper, the extension with its sandbox entitlements, the app) with
    the hardened runtime and a secure timestamp, notarising and stapling the app, the DMG
    signed, notarised and stapled. The keychain and the key go before the checks:
    `codesign --verify --strict`, `spctl -a -vv`, `stapler validate`, and `bin/check-launch`
    (the app starts, Settings opens, a cold start survives a slow worker). Read access only.
-3. **publish**, on a tag only: the only job that may write; it publishes the release build's
-   files and runs no code of this repository.
+3. **core-publish-image**, on a tag only, after the signed build: the image from core-image's
+   cache, pushed to ghcr. It may write packages, nothing else; the package `slipstream` grants
+   this repository write access in its settings (2026-10-29).
+4. **publish**, on a tag only, after the image: the only job that may write the repository; it
+   publishes the release build's files, sets the tag `core/v<…>` and runs no code of this
+   repository.
 
 Actions are pinned by commit. A pull request from a fork gets no secrets and builds ad hoc.
 Locally `bin/package` signs ad hoc too; give `SIGN_IDENTITY`, `NOTARY_KEY`, `NOTARY_KEY_ID`,

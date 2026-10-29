@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: encode-worker control API
+  title: Slipstream core control API
   version: 1.5.0
   license: { name: MIT, identifier: MIT }
   summary: How the app that embeds the worker (Slipstream) reads its state and pauses, resumes or stops it.
@@ -9,7 +9,7 @@ info:
     `EQ_CONTROL_SOCKET`. Without that variable there is no socket. The worker's tunnel and the
     queue are not involved: a pause is passed on to the queue by the worker itself.
 servers:
-  - url: http://encode-worker.sock
+  - url: http://slipstream.sock
     description: Any host name; the connection goes to the Unix socket.
 security: []
 paths:

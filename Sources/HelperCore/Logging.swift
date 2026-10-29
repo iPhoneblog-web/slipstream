@@ -96,11 +96,11 @@ public enum WorkerLogLine {
     /// `time=… level=INFO msg="job ended" lease=…`: the level is slog's, and the line keeps the
     /// message and its attributes without the time (the file has its own) and the level. A line
     /// in another form is Go's runtime or a tool: a panic is a fault, the worker's last word
-    /// (`encode-worker: …`) an error, anything else a warning.
+    /// (`slipstream: …`) an error, anything else a warning.
     public static func stderr(_ line: String) -> (LogLevel, String) {
         if line.hasPrefix("time="), let parsed = slog(line) { return parsed }
         if line.hasPrefix("panic:") || line.hasPrefix("fatal error:") { return (.fault, line) }
-        if line.hasPrefix("encode-worker:") { return (.error, line) }
+        if line.hasPrefix("slipstream:") { return (.error, line) }
         return (.warning, line)
     }
 

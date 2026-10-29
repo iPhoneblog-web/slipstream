@@ -1,13 +1,14 @@
-// Slipstream's core, the worker (its binary still encode-worker), takes jobs from encode-queue
-// through its own userspace WireGuard and runs them, a normal job's at nice 19 and a realtime
-// job's at the worker's own nice (v0.2.20).
+// slipstream is Slipstream's core, the same on every OS: it takes jobs from encode-queue through
+// its own userspace WireGuard and runs them, a normal job's at nice 19 and a realtime job's at
+// the worker's own nice (v0.2.20). Up to encode-queue v0.2.27 it was encode-worker.
 //
-//	encode-worker pubkey        print this worker's public key (made on first use), for pairing
-//	encode-worker versions      print what this worker runs, as the queue will see it
-//	encode-worker selftest      encode, cut and remux a short clip with this machine's ffmpeg and
-//	                            check each result; exit 1 with the problems
-//	encode-worker healthcheck   exit 0 if the queue answered within the last two minutes
-//	encode-worker [run]         take jobs
+//	slipstream --version     print "slipstream 1.4.0 (macOS 26.5, darwin/arm64)"
+//	slipstream pubkey        print this worker's public key (made on first use), for pairing
+//	slipstream versions      print what this worker runs, as the queue will see it
+//	slipstream selftest      encode, cut and remux a short clip with this machine's ffmpeg and
+//	                         check each result; exit 1 with the problems
+//	slipstream healthcheck   exit 0 if the queue answered within the last two minutes
+//	slipstream [run]         take jobs
 //
 // Every setting is a flag or an environment variable (the flag wins); the README lists them.
 // `--key-stdin --control stdio` is how an app embeds it (README, "Embedding").
@@ -25,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -83,24 +85,25 @@ func main() {
 	flag.StringVar(&f.fonts, "fonts", env.String("EQ_FONTS", ""), "more font families, comma-separated (EQ_FONTS)")
 	flag.StringVar(&f.control, "control", env.String("EQ_CONTROL_SOCKET", ""), "stdio for JSON lines on standard input and output, or a Unix socket path (EQ_CONTROL_SOCKET)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: encode-worker [flags] [pubkey|versions|healthcheck|run]\n\n")
+		fmt.Fprintf(os.Stderr, "usage: slipstream [flags] [pubkey|versions|selftest|healthcheck|run]\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 	if f.version {
-		fmt.Println(version)
+		fmt.Printf("slipstream %s (%s, %s/%s)\n", strings.TrimPrefix(version, "v"), worker.System(), runtime.GOOS, runtime.GOARCH)
 		return
 	}
 	if err := env.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "encode-worker:", err)
+		fmt.Fprintln(os.Stderr, "slipstream:", err)
 		os.Exit(2)
 	}
 	if err := run(flag.Arg(0), f, env); err != nil {
-		fmt.Fprintln(os.Stderr, "encode-worker:", err)
+		fmt.Fprintln(os.Stderr, "slipstream:", err)
 		os.Exit(1)
 	}
 }
 
+// defaultStateDir keeps encode-worker's folder: it holds the key the queue knows this worker by.
 func defaultStateDir() string {
 	if d, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(d, "encode-worker")
@@ -253,7 +256,7 @@ func run(cmd string, f flags, env *config.Env) error {
 			}
 		}()
 	}
-	log.Info("encode-worker up", "version", version, "name", f.name, "address", tcfg.Address, "api", tcfg.API, "public_key", key.Public())
+	log.Info("slipstream up", "version", version, "name", f.name, "address", tcfg.Address, "api", tcfg.API, "public_key", key.Public())
 	return w.Run(ctx)
 }
 

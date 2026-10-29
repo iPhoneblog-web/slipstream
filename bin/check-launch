@@ -105,7 +105,7 @@ wait $pid 2>/dev/null || true
 cold=$(mktemp -d)
 trap 'kill $pid 2>/dev/null || true; rm -rf "$cold"' EXIT
 ditto "$app" "$cold/Slipstream.app"
-w="$cold/Slipstream.app/Contents/Helpers/encode-worker"
+w="$cold/Slipstream.app/Contents/Helpers/slipstream"
 mkdir -p "${w:h}"
 [[ -f $w ]] && mv "$w" "$w.real"
 print -r -- '#!/bin/sh

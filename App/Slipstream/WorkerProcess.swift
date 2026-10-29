@@ -1,7 +1,7 @@
 import Foundation
 import HelperCore
 
-/// The embedded worker, `Contents/Helpers/encode-worker` (docs/worker.md): started with the
+/// The embedded core, `Contents/Helpers/slipstream` (core/, docs/worker.md): started with the
 /// private key on its standard input, commands after it, events back on its standard output.
 /// It sets its tools' priority itself (encode-queue v0.2.20): a normal job's at `nice 19` under the
 /// utility QoS clamp, a Sofort job's at the worker's own, which is why it starts at nice 0 here.
@@ -41,13 +41,13 @@ final class WorkerProcess: @unchecked Sendable {
 
     private static let usage: String? = {
         let start = Date()
-        let usage = WorkerFlags.usage(of: Paths.helper("encode-worker"))
+        let usage = WorkerFlags.usage(of: Paths.helper("slipstream"))
         // bin/check-launch waits for this line.
         Log.notice(.worker, "worker usage read in \(Int(Date().timeIntervalSince(start) * 1000)) ms\(usage == nil ? ", no worker" : "")")
         return usage
     }()
 
-    static var isPresent: Bool { FileManager.default.isExecutableFile(atPath: Paths.helper("encode-worker").path) }
+    static var isPresent: Bool { FileManager.default.isExecutableFile(atPath: Paths.helper("slipstream").path) }
 
     func start(key: WireGuardKey, limits: Limits, version: String) throws {
         try FileManager.default.createDirectory(at: Paths.workerState, withIntermediateDirectories: true)
@@ -57,7 +57,7 @@ final class WorkerProcess: @unchecked Sendable {
         // at its own priority; an unprivileged process cannot lower its nice again, so a worker at
         // 19 held Sofort jobs at 19 too. User-initiated, so nothing clamps it below the default
         // (docs/traps.md, "Priority"). A worker before v0.2.20 renices itself to 19 as before.
-        process.executableURL = Paths.helper("encode-worker")
+        process.executableURL = Paths.helper("slipstream")
         process.qualityOfService = .userInitiated
         var arguments: [String] = [
             "--key-stdin", "--tunnel-file", Paths.tunnel.path, "--state-dir", Paths.workerState.path,

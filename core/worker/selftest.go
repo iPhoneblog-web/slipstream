@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 )
 
-// SelfTest is `encode-worker selftest` (v0.2.8): what video-pipeline's check-variant did on
+// SelfTest is `slipstream selftest` (v0.2.8): what video-pipeline's check-variant did on
 // the pipeline's machine, now on the worker that encodes. It makes a short clip with this
 // worker's ffmpeg, then a rung with the mono measurement, a cut and a remux, each with its
 // check, and returns the figures and every problem. Nothing is kept.
 func SelfTest(ctx context.Context, cfg Config) (map[string]any, []string) {
 	cfg.defaults()
-	dir, err := os.MkdirTemp("", "encode-worker-selftest-")
+	dir, err := os.MkdirTemp("", "slipstream-selftest-")
 	if err != nil {
 		return nil, []string{err.Error()}
 	}

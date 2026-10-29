@@ -63,7 +63,7 @@ enum Paths {
     /// whatever binary the environment names.
     static func helper(_ name: String) -> URL {
         #if DEBUG
-        if name == "encode-worker", let path = ProcessInfo.processInfo.environment["SLIPSTREAM_WORKER"] {
+        if name == "slipstream", let path = ProcessInfo.processInfo.environment["SLIPSTREAM_WORKER"] {
             return URL(fileURLWithPath: path)
         }
         #endif
